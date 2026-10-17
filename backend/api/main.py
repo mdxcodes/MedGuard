@@ -16,6 +16,17 @@ POST /predict
     Accepts an ``AssessmentRequest``, runs the saved preprocessing + model
     pipeline, and returns a ``PredictResponse`` with prediction + optional
     SHAP explanation.
+
+App construction
+----------------
+``create_app()`` builds a *fresh* application on every call rather than
+returning a module-level singleton. This lets tests and deployments select
+CORS policy and artifact paths through environment or monkeypatched
+configuration *at construction time*: the CORS middleware is added from the
+current ``backend.api.config.ALLOW_FOREIGN_ORIGIN`` value, so monkeypatching
+that attribute before calling ``build_app()`` is honoured. The production
+default (``ALLOW_FOREIGN_ORIGIN`` unset) still adds an empty allow-list, so
+arbitrary origins are never trusted by default.
 """
 
 from __future__ import annotations
@@ -27,7 +38,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.config import ALLOW_FOREIGN_ORIGIN, build_app
+from backend.api import config as api_config
 from backend.api.inference import predict
 from backend.api.schemas import AssessmentRequest, ModelInfoResponse, PredictResponse
 
@@ -47,61 +58,71 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("Shutting down MedGuard API.")
 
 
-app = FastAPI(
-    title="MedGuard (Triage One)",
-    description=(
-        "Research prototype for AI-assisted emergency triage. This service "
-        "is NOT clinically validated and must NOT be used for real-time "
-        "patient triage."
-    ),
-    version="0.2.0-demo",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    """Construct a fresh MedGuard FastAPI application.
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"] if ALLOW_FOREIGN_ORIGIN else [],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    """Liveness probe. Always 200 as long as the process is up."""
-    return {"status": "ok"}
-
-
-@app.get("/model-info", response_model=ModelInfoResponse)
-def model_info() -> ModelInfoResponse:
-    """Expose the loaded model's manifest and known limitations."""
-    from backend.api.config import get_or_raise_model
-
-    try:
-        _, manifest, _ = get_or_raise_model()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    return ModelInfoResponse(
-        model_name=manifest.model_name,
-        model_kind=manifest.model_kind,
-        target=manifest.target,
-        supported_esi_levels=manifest.esi_labels,
-        training_rows=manifest.training_rows,
-        training_patients=manifest.training_patients,
-        random_seed=manifest.random_seed,
-        dataset=manifest.dataset,
-        created_utc=manifest.created_utc,
-        note=manifest.note,
+    The app is built per call (not returned as a singleton) so that CORS and
+    artifact configuration are applied from the *current* configuration state
+    at construction time. The production default leaves ``allow_origins``
+    empty, so cross-origin requests are rejected unless
+    ``MEDGUARD_ALLOW_FOREIGN_ORIGIN=1`` is explicitly set.
+    """
+    app = FastAPI(
+        title="MedGuard (Triage One)",
+        description=(
+            "Research prototype for AI-assisted emergency triage. This service "
+            "is NOT clinically validated and must NOT be used for real-time "
+            "patient triage."
+        ),
+        version="0.2.0-demo",
+        lifespan=lifespan,
     )
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"] if api_config.ALLOW_FOREIGN_ORIGIN else [],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-@app.post("/predict", response_model=PredictResponse, status_code=200)
-def predict_endpoint(request: AssessmentRequest) -> PredictResponse:
-    """Predict ESI acuity from the supplied triage assessment."""
-    return predict(request)
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        """Liveness probe. Always 200 as long as the process is up."""
+        return {"status": "ok"}
+
+    @app.get("/model-info", response_model=ModelInfoResponse)
+    def model_info() -> ModelInfoResponse:
+        """Expose the loaded model's manifest and known limitations."""
+        from backend.api.config import get_or_raise_model
+
+        try:
+            _, manifest, _ = get_or_raise_model()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        return ModelInfoResponse(
+            model_name=manifest.model_name,
+            model_kind=manifest.model_kind,
+            target=manifest.target,
+            supported_esi_levels=manifest.esi_labels,
+            training_rows=manifest.training_rows,
+            training_patients=manifest.training_patients,
+            random_seed=manifest.random_seed,
+            dataset=manifest.dataset,
+            created_utc=manifest.created_utc,
+            note=manifest.note,
+        )
+
+    @app.post("/predict", response_model=PredictResponse, status_code=200)
+    def predict_endpoint(request: AssessmentRequest) -> PredictResponse:
+        """Predict ESI acuity from the supplied triage assessment."""
+        return predict(request)
+
+    return app
 
 
-# Re-export for callers that do `from backend.api.main import app`.
-__all__ = ["app"]
+#: Module-level application for ``uvicorn backend.api.main:app``.
+app = create_app()
+
+__all__ = ["app", "create_app"]

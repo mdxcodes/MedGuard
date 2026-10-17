@@ -150,10 +150,9 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
 
 
 def build_app() -> FastAPI:
-    """Construct the MedGuard FastAPI application."""
-    from backend.api import main  # avoid circular imports at module-level only
-
-    return main.app
+    """Build a fresh FastAPI application from the current configuration."""
+    from backend.api.main import create_app
+    return create_app()
 
 
 def get_or_raise_model() -> tuple[Any, ModelManifest, list[str]]:

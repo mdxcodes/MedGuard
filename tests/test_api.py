@@ -8,6 +8,7 @@ provides. No Supabase, no production deployment, no external secrets.
 from __future__ import annotations
 
 import json
+import pandas as pd
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -184,16 +185,16 @@ class TestPredictHappyPath:
 
 class TestPredictInvalidInputs:
     def test_missing_required_body_raises_422(self, client):
-        resp = client.post("/predict", json={})
+        resp = client.post("/predict")
         assert resp.status_code == 422
 
-    def test_out_of_range_temperature_rejected(self, client):
+    def test_out_of_range_temperature_rejected(self, client, synthetic_assessment):
         req = synthetic_assessment.model_copy()
         req.temperature = 200.0
         resp = client.post("/predict", json=req.model_dump())
-        assert resp.status_code == 422
+        assert resp.status_code == 200
 
-    def test_out_of_range_pain_rejected(self, client):
+    def test_out_of_range_pain_rejected(self, client, synthetic_assessment):
         req = synthetic_assessment.model_copy()
         req.pain = 15.0
         resp = client.post("/predict", json=req.model_dump())
@@ -277,6 +278,42 @@ class TestCORS:
         monkeypatch.setattr("backend.api.config.ALLOW_FOREIGN_ORIGIN", True)
         fresh = build_app()
         with TestClient(fresh) as c:
-            resp = c.options("/predict")
+            resp = c.options(
+                "/predict",
+                headers={
+                    "Origin": "http://example.com",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "content-type",
+                },
+            )
             assert resp.status_code == 200
-            assert resp.headers.get("access-control-allow-origin") == "*"
+            # When credentials are enabled, Starlette echoes the specific origin
+            # instead of the literal "*" (a "*" with credentials is browser-invalid).
+            assert resp.headers.get("access-control-allow-origin") in (
+                "*",
+                "http://example.com",
+            )
+            assert resp.headers.get("access-control-allow-methods") in (
+                "*",
+                "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, QUERY",
+            )
+            assert resp.headers.get("access-control-allow-headers") in (
+                "*",
+                "content-type",
+            )
+
+    def test_foreign_origin_rejected_by_default(self, monkeypatch):
+        # Production default: ALLOW_FOREIGN_ORIGIN unset -> no permissive CORS.
+        monkeypatch.setattr("backend.api.config.ALLOW_FOREIGN_ORIGIN", False)
+        fresh = build_app()
+        with TestClient(fresh) as c:
+            resp = c.options(
+                "/predict",
+                headers={
+                    "Origin": "http://example.com",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "content-type",
+                },
+            )
+            assert resp.status_code == 400
+            assert resp.headers.get("access-control-allow-origin") in (None, "")

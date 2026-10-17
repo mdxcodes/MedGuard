@@ -13,10 +13,15 @@ import numpy as np
 import pandas as pd
 
 from backend.api.config import get_or_raise_model
+try:
+    from backend.ml.explain import explain_prediction
+except Exception:  # pragma: no cover
+    explain_prediction = None
 from backend.api.schemas import (
     AssessmentRequest,
     ClassProbability,
     ExplanationResponse,
+    ExplanationItem,
     PredictResponse,
     Prediction,
 )
@@ -106,23 +111,8 @@ def _compute_prediction(
     sample_frame = _normalize_assessment(request)
     cleaned = _apply_validation(sample_frame)
 
-    # Run the derive step BEFORE selecting columns, so that shock_index etc.
-    # are present on the DataFrame and the ColumnTransformer downstream does
-    # not raise "columns are missing".
     from backend.ml.features import derive_features
-    derived = derive_features(cleaned)
-
-    # The pipeline expects columns matching the training feature set. We pass
-    # only the allow-listed columns present on the derived frame; remainder is
-    # dropped by the ColumnTransformer.
-    available = list(derived.columns.intersection(feature_names))
-    X = derived[available]
-    if len(available) != len(feature_names):
-        log.warning(
-            "Predicting with %d of %d expected features; missing: %s",
-            len(available), len(feature_names),
-            sorted(set(feature_names) - set(available)),
-        )
+    X = derive_features(cleaned)
 
     pred_idx = int(pipeline.predict(X)[0])
     classes = pipeline.named_steps["estimator"].classes_.tolist()
@@ -147,7 +137,6 @@ def _compute_prediction(
     explanation_status = "unavailable"
     top_features: list[dict[str, Any]] = []
     try:
-        from backend.ml.explain import explain_prediction
         expl = explain_prediction(
             pipeline,
             X,
