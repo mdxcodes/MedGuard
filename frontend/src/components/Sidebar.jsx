@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Menu, X, Shield, Activity, BrainCircuit, BarChart3, BookOpen,
-  Waves, ChevronRight
+  Menu, X, Shield, Activity, BrainCircuit, BarChart3, BookOpen, Database,
+  Waves, ChevronRight, GitCompare, AlertTriangle, Lightbulb, ShieldCheck, FlaskConical
 } from 'lucide-react';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Assessment', path: '/assessment', icon: Activity },
   { label: 'Prediction', path: '/prediction', icon: BrainCircuit },
   { label: 'Performance', path: '/performance', icon: BarChart3 },
+  { label: 'Dataset', path: '/dataset', icon: Database },
   { label: 'Methodology', path: '/methodology', icon: BookOpen },
 ];
 

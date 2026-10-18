@@ -167,11 +167,41 @@ class ExplanationResponse(BaseModel):
     )
 
 
+
+class QualityWarning(BaseModel):
+    """Input quality or distribution warning."""
+    code: str
+    message: str
+    feature: Optional[str] = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class InputQualityResponse(BaseModel):
+    """Conservative input quality assessment."""
+    has_errors: bool = False
+    has_warnings: bool = False
+    warnings: list[QualityWarning] = Field(default_factory=list)
+    errors: list[QualityWarning] = Field(default_factory=list)
+
+
+
 class ErrorResponse(BaseModel):
     """Generic error envelope."""
 
     detail: str
     code: Optional[str] = Field(None, description="Machine-readable error code.")
+
+
+class UncertaintyResponse(BaseModel):
+    """Interpretable uncertainty indicators (research-only)."""
+    max_prob: float
+    prediction_margin: float
+    predictive_entropy: float
+    entropy_norm: float
+    available: bool = True
+    calibration_status: str = "unsupported_by_sample_size"
+    note: str = "Indicators describe model confidence patterns, not clinical certainty."
+
 
 
 class PredictResponse(BaseModel):
@@ -180,6 +210,8 @@ class PredictResponse(BaseModel):
     prediction: Optional[Prediction] = None
     explanation: Optional[ExplanationResponse] = None
     error: Optional[ErrorResponse] = None
+    quality: Optional[InputQualityResponse] = None
+    uncertainty: Optional[UncertaintyResponse] = None
     disclaimer: str = (
         "MEDGUARD IS A RESEARCH PROTOTYPE. This output must NOT be used for "
         "clinical decision-making, triage routing, or treatment guidance."

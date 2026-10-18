@@ -1,12 +1,29 @@
 import { Link } from 'react-router-dom';
 import { BarChart3, ChevronRight } from 'lucide-react';
+import ConfusionMatrix from '../components/ConfusionMatrix';
+import CVDistChart from '../components/CVDistChart';
+import ReportExportButton from '../components/ReportExportButton';
+
+const CV_AGG_CONFUSION = [[12,6,0,0,0],[10,53,34,0,0],[1,29,60,0,0],[0,1,1,0,0],[0,0,0,0,0]];
+const CV_SUMMARY = {
+            mean_macro_f1: 0.573857,
+            std_macro_f1: 0.105266,
+            mean_balanced_accuracy: 0.600449,
+            std_balanced_accuracy: 0.102624,
+            mean_quadratic_weighted_kappa: 0.503404,
+            std_quadratic_weighted_kappa: 0.035000,
+            n_folds: 5,
+          };
 
 export default function PerformancePage() {
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tighter text-navy">Model Performance</h1>
-        <p className="text-sm text-text-secondary mt-1">Verified from docs/MODEL_EVALUATION.md and docs/MODEL_CARD.md. All metrics from actual experiment runs — no fabricated values.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tighter text-navy">Model Performance</h1>
+          <p className="text-sm text-text-secondary mt-1">Verified from docs/MODEL_EVALUATION.md and docs/MODEL_CARD.md. All metrics from actual experiment runs — no fabricated values.</p>
+        </div>
+        <ReportExportButton />
       </div>
 
       <div className="bg-gradient-to-r from-navy-deep to-navy-soft text-white rounded-3xl p-8 shadow-elevated">

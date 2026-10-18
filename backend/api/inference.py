@@ -26,6 +26,14 @@ from backend.api.schemas import (
     Prediction,
 )
 from backend.ml import config as ml_config
+try:
+    from backend.ml.input_quality import assess_input_quality
+except Exception:
+    assess_input_quality = None
+try:
+    from backend.ml.uncertainty import compute_uncertainty_metrics
+except Exception:
+    compute_uncertainty_metrics = None
 from backend.ml.validation import (
     normalize_temperature,
     parse_pain,
@@ -182,7 +190,25 @@ def predict(request: AssessmentRequest) -> PredictResponse:
         prediction, explanation = _compute_prediction(
             pipeline, feature_names, request
         )
-        return PredictResponse(prediction=prediction, explanation=explanation)
+        quality = None
+        try:
+            if assess_input_quality is not None:
+                sample_frame = _normalize_assessment(request)
+                quality = assess_input_quality(sample_frame)
+        except Exception as exc:
+            log.warning("Quality assessment failed: %s", exc)
+            quality = {"has_warnings": True, "warnings": [{"code": "QUALITY_ASSESS_FAILED", "message": str(exc)}], "errors": []}
+        uncertainty = None
+        try:
+            if compute_uncertainty_metrics is not None and prediction and prediction.probabilities:
+                pvec = [pp.probability for pp in prediction.probabilities]
+                um = compute_uncertainty_metrics(pvec)
+                um["calibration_status"] = "unsupported_by_sample_size"  # conservative
+                uncertainty = um
+        except Exception as exc:
+            log.warning("Uncertainty computation failed: %s", exc)
+            uncertainty = None
+        return PredictResponse(prediction=prediction, explanation=explanation, quality=quality, uncertainty=uncertainty)
     except Exception as exc:  # noqa: BLE001
         log.exception("Prediction failed for request %s", request)
         return PredictResponse(

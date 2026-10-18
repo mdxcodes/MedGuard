@@ -1,4 +1,6 @@
 import { BarChart3, ArrowUpRight, Shield, AlertTriangle } from 'lucide-react';
+import QualityWarnings from './QualityWarnings';
+import UncertaintyIndicators from './UncertaintyIndicators';
 
 export default function PredictionResults({ result }) {
   if (!result) return null;
@@ -47,6 +49,12 @@ export default function PredictionResults({ result }) {
           </span>
         </div>
       </div>
+
+      {/* Quality Warnings */}
+      {result.quality && <QualityWarnings quality={result.quality} />}
+
+      {/* Uncertainty */}
+      {result.uncertainty && <UncertaintyIndicators uncertainty={result.uncertainty} />}
 
       {/* Probability bars */}
       <div className="bg-white rounded-2xl border border-border shadow-card p-5">

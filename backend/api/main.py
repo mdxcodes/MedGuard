@@ -40,6 +40,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import config as api_config
 from backend.api.inference import predict
+try:
+    from backend.api.report_endpoint import export_research_report
+except Exception:
+    export_research_report = None
+try:
+    from backend.api.registry_endpoint import list_model_versions, get_model_version
+except Exception:
+    list_model_versions = None
+    get_model_version = None
+try:
+    from backend.api.experiment_endpoint import run_new_experiment, list_exps, get_exp
+except Exception:
+    run_new_experiment = None; list_exps = None; get_exp = None
 from backend.api.schemas import AssessmentRequest, ModelInfoResponse, PredictResponse
 
 log = logging.getLogger("medguard.api.main")
@@ -113,6 +126,37 @@ def create_app() -> FastAPI:
             created_utc=manifest.created_utc,
             note=manifest.note,
         )
+
+    @app.get("/models/versions")
+    def models_versions():
+        if list_model_versions is None: raise HTTPException(status_code=500, detail="registry unavailable")
+        return list_model_versions()
+
+    @app.get("/models/active")
+    def models_active():
+        if get_model_version is None: raise HTTPException(status_code=500, detail="registry unavailable")
+        return get_model_version()
+
+    @app.post("/experiments/run")
+    def exp_run(payload: dict = None):
+        if run_new_experiment is None: raise HTTPException(status_code=500, detail="unavailable")
+        return run_new_experiment(payload or {})
+
+    @app.get("/experiments")
+    def exp_list():
+        if list_exps is None: raise HTTPException(status_code=500, detail="unavailable")
+        return list_exps()
+
+    @app.get("/experiments/{exp_id}")
+    def exp_get(exp_id: str):
+        if get_exp is None: raise HTTPException(status_code=500, detail="unavailable")
+        return get_exp(exp_id)
+
+    @app.get("/export/report")
+    def export_report():
+        if export_research_report is None:
+            raise HTTPException(status_code=500, detail="Report export not available")
+        return export_research_report()
 
     @app.post("/predict", response_model=PredictResponse, status_code=200)
     def predict_endpoint(request: AssessmentRequest) -> PredictResponse:

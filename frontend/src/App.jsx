@@ -6,6 +6,10 @@ import AssessmentPage from './pages/AssessmentPage';
 import PredictionPage from './pages/PredictionPage';
 import PerformancePage from './pages/PerformancePage';
 import MethodologyPage from './pages/MethodologyPage';
+import DatasetExplorerPage from './pages/DatasetExplorerPage';
+import ScenarioComparisonPage from './pages/ScenarioComparisonPage';
+import ErrorAnalysisPage from './pages/ErrorAnalysisPage';
+import ExplainabilityPage from './pages/ExplainabilityPage';
 import { useState } from 'react';
 
 export default function App() {
@@ -24,6 +28,13 @@ export default function App() {
               <Route path="/prediction" element={<PredictionPage />} />
               <Route path="/performance" element={<PerformancePage />} />
               <Route path="/methodology" element={<MethodologyPage />} />
+              <Route path="/dataset" element={<DatasetExplorerPage />} />
+              <Route path="/compare" element={<ScenarioComparisonPage />} />
+              <Route path="/errors" element={<ErrorAnalysisPage />} />
+              <Route path="/explain" element={<ExplainabilityPage />} />
+              <Route path="/registry" element={<ModelRegistryPage />} />
+              <Route path="/experiments" element={<ExperimentPage />} />
+              <Route path="/drift" element={<DriftPage />} />
             </Routes>
           </main>
 

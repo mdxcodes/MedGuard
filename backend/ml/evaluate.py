@@ -166,3 +166,45 @@ def run_grouped_cv_evaluation(
         "aggregate_confusion_matrix": agg_cm,
         "fold_diagnostics": fold_diagnostics,
     }
+
+
+
+def run_grouped_cv_oof(
+    model_factory: Any,
+    feature_frame: pd.DataFrame,
+    n_splits: int = config.N_SPLITS,
+) -> dict[str, Any]:
+    """Run GroupKFold cross-validation and collect out-of-fold predictions.
+    
+    Returns per-sample predictions for samples in feature_frame in original order,
+    along with their true labels and fold indices. No patient identifiers are included.
+    """
+    from sklearn.model_selection import GroupKFold
+
+    groups = feature_frame[config.SUBJECT_ID_COLUMN].values
+    X = feature_frame.drop(columns=[config.TARGET_COLUMN, config.SUBJECT_ID_COLUMN])
+    y = feature_frame[config.TARGET_COLUMN].values.astype(int)
+
+    gkf = GroupKFold(n_splits=n_splits)
+    oof_pred = np.full(len(X), fill_value=-1, dtype=int)
+    oof_proba = np.zeros((len(X), len(config.ESI_LABELS)))
+    fold_indices = np.full(len(X), fill_value=-1, dtype=int)
+
+    for fold_idx, (train_idx, val_idx) in enumerate(gkf.split(X, y, groups=groups)):
+        pipeline = model_factory()
+        pipeline.fit(X.iloc[train_idx], y[train_idx])
+        preds = pipeline.predict(X.iloc[val_idx])
+        proba = pipeline.predict_proba(X.iloc[val_idx])
+        oof_pred[val_idx] = preds
+        oof_proba[val_idx, :] = proba
+        fold_indices[val_idx] = fold_idx
+
+    return {
+        "y_true": y.tolist(),
+        "y_pred": oof_pred.tolist(),
+        "y_pred_proba": oof_proba.tolist(),
+        "fold": fold_indices.tolist(),
+        "classes": config.ESI_LABELS,
+        "n_samples": len(X),
+    }
+

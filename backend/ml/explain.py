@@ -137,3 +137,96 @@ def explain_prediction(
         "top_features": feature_impacts[:10],
         "note": "Attribution indicates model feature sensitivity, not medical causation.",
     }
+
+
+def explain_global(
+    pipeline: Pipeline,
+    X: pd.DataFrame,
+    background_size: int = 100,
+    max_features: int = 20,
+) -> dict[str, Any]:
+    """Compute global SHAP feature importance (mean |SHAP|) over a reference dataset.
+
+    Parameters
+    ----------
+    pipeline : Fitted pipeline with 'preprocess' and 'estimator'
+    X : Reference dataset (e.g. held-out or OOF evaluation samples). No identifiers included.
+    background_size : Background samples for explainer
+    max_features : Max features to return
+
+    Returns
+    -------
+    dict with global feature importances aggregated by mean absolute SHAP
+    """
+    if "preprocess" not in pipeline.named_steps or "estimator" not in pipeline.named_steps:
+        raise ValueError("Pipeline must contain 'preprocess' and 'estimator' steps.")
+
+    preprocessor = pipeline.named_steps["preprocess"]
+    estimator = pipeline.named_steps["estimator"]
+    feature_names = leakage_free_feature_names(pipeline)
+
+    # Use subset for efficiency
+    n = min(len(X), background_size)
+    ref_df = X.sample(n, random_state=42) if len(X) > n else X.copy()
+    ref_trans = preprocessor.transform(ref_df)
+    if hasattr(ref_trans, "toarray"):
+        ref_trans = ref_trans.toarray()
+
+    bg_n = min(len(X), background_size)
+    bg_df = X.sample(bg_n, random_state=42) if len(X) > bg_n else X.copy()
+    bg_trans = preprocessor.transform(bg_df)
+    if hasattr(bg_trans, "toarray"):
+        bg_trans = bg_trans.toarray()
+
+    if isinstance(estimator, RandomForestClassifier):
+        explainer = shap.TreeExplainer(estimator)
+        raw_shap = explainer.shap_values(ref_trans)
+    elif isinstance(estimator, LogisticRegression):
+        explainer = shap.LinearExplainer(estimator, bg_trans)
+        raw_shap = explainer.shap_values(ref_trans)
+    else:
+        explainer = shap.KernelExplainer(estimator.predict_proba, bg_trans)
+        raw_shap = explainer.shap_values(ref_trans)
+
+    classes = [int(c) for c in estimator.classes_]
+
+    # For multi-class, aggregate across classes as mean |SHAP| per feature
+    shap_abs_sum = np.zeros(len(feature_names))
+    shap_count_contrib = 0
+
+    if isinstance(raw_shap, list):
+        for cidx in range(len(raw_shap)):
+            if cidx < len(classes):
+                arr = raw_shap[cidx]
+                if arr is not None and len(arr.shape) >= 2:
+                    shap_abs_sum += np.mean(np.abs(arr), axis=0)
+                    shap_count_contrib += 1
+    elif isinstance(raw_shap, np.ndarray):
+        if raw_shap.ndim == 3:  # (n_samples, n_features, n_classes)
+            for cidx in range(raw_shap.shape[2]):
+                shap_abs_sum += np.mean(np.abs(raw_shap[:, :, cidx]), axis=0)
+                shap_count_contrib += 1
+        elif raw_shap.ndim == 2:  # (n_samples, n_features)
+            shap_abs_sum += np.mean(np.abs(raw_shap), axis=0)
+            shap_count_contrib += 1
+
+    if shap_count_contrib > 0:
+        mean_abs_shap = shap_abs_sum / shap_count_contrib
+    else:
+        mean_abs_shap = shap_abs_sum
+
+    # Build ranked list
+    importances = []
+    for i, name in enumerate(feature_names):
+        importances.append({
+            "feature": name,
+            "mean_abs_shap": float(mean_abs_shap[i]) if i < len(mean_abs_shap) else 0.0,
+        })
+    importances.sort(key=lambda x: x["mean_abs_shap"], reverse=True)
+
+    return {
+        "model_kind": type(estimator).__name__,
+        "n_reference_samples": len(ref_df),
+        "feature_importances": importances[:max_features],
+        "note": "Global SHAP importance (mean |SHAP|). Describes model behavior, not medical causation.",
+    }
