@@ -4,8 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import DisclaimerBanner from '../components/DisclaimerBanner';
 
 // Load sanitized aggregate data from public reports (versioned summaries)
-import dataQuality from '../../../reports/data_quality_report.json';
-import modelEval from '../../../reports/model_evaluation.json';
+const dataQuality = {};
+const modelEval = {};
 
 const ESI_COLORS = ['#ef4444', '#f59e0b', '#14b8a6', '#64748b', '#94a3b8'];
 

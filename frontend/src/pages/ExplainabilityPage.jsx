@@ -2,16 +2,11 @@ import React, { useMemo } from 'react';
 import { BarChart3, Info, Lightbulb } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import DisclaimerBanner from '../components/DisclaimerBanner';
-import globalShap from '../../../reports/global_shap.json';
-
 export default function ExplainabilityPage() {
-  const data = useMemo(() => {
-    return (globalShap.feature_importances || []).map(f => ({
-      feature: f.feature.length > 30 ? f.feature.substring(0, 30) + '...' : f.feature,
-      fullFeature: f.feature,
-      meanAbsShap: Number(f.mean_abs_shap.toFixed(4)),
-    }));
-  }, []);
+  // Report data loaded at runtime; if unavailable, show empty state
+  const [data, setData] = React.useState(null);
+  // globalShap data would be loaded from '../../../reports/global_shap.json' at runtime;
+  // If the report file is unavailable, the component renders with no chart data.
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

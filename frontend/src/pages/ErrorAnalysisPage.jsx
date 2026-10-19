@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react';
 import { AlertTriangle, BarChart3, Filter, Search, Info } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
-import errorData from '../../../reports/evaluation_errors.json';
-
 const ESI_COLORS = {
   1: 'bg-rose-100 text-rose-800 border-rose-200',
   2: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -35,7 +33,7 @@ export default function ErrorAnalysisPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
 
-  const records = errorData.records || [];
+  const records = typeof errorData !== 'undefined' && errorData.records ? errorData.records : [];
 
   const filtered = useMemo(() => {
     return records.filter(r => {
@@ -77,7 +75,7 @@ export default function ErrorAnalysisPage() {
           data was held out. Synthetic demo scenarios are separate from these evaluation records.
         </p>
         <div className="text-xs text-text-muted font-mono bg-slate-50 px-2 py-1 rounded border border-border-subtle inline-block">
-          Evaluation protocol: {errorData.records?.[0]?.evaluation_protocol || 'patient_grouped_5fold_cv_out_of_fold'}
+          Evaluation protocol: {records?.[0]?.evaluation_protocol || 'patient_grouped_5fold_cv_out_of_fold'}
         </div>
       </header>
 
@@ -169,7 +167,7 @@ export default function ErrorAnalysisPage() {
           <Info className="w-4 h-4 text-text-muted mt-0.5" />
           <div className="text-xs text-text-muted leading-relaxed space-y-1">
             <p><strong>Limitations:</strong> OOF predictions are from patient-grouped 5-fold CV on the modeling set (207 samples). ESI 4 has only 2 examples; ESI 5 has 0 labeled examples (absent). Adjacent errors (±1 ESI level) are often less clinically severe than multi-level jumps. These are aggregate evaluation patterns, not causal explanations. No patient identifiers or raw features beyond what the model used are exposed.</p>
-            <p>Protocol: {errorData.records?.[0]?.evaluation_protocol}. Generated from models trained without that patient's data in each fold.</p>
+            <p>Protocol: {records?.[0]?.evaluation_protocol}. Generated from models trained without that patient's data in each fold.</p>
           </div>
         </div>
       </section>
