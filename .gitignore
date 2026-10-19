@@ -1,0 +1,162 @@
+# ---------------------------------------------------------------------------
+# MedGuard (Triage One) — .gitignore
+#
+# GOLDEN RULE: raw MIMIC data, licensed dataset files, secrets and generated
+# model artifacts must NEVER be committed to this repository or pushed to
+# GitHub. MIMIC-IV-ED is licensed under the ODC Open Database License (ODbL)
+# and the PhysioNet Credentialed Health Data License.
+# ---------------------------------------------------------------------------
+
+# --- Licensed research datasets (NEVER COMMIT) -----------------------------
+# Raw MIMIC-IV-ED demo / full dataset files.
+mimic-iv-ed-demo-2.2/
+mimic-iv-ed-demo-2.2.zip
+mimic-iv-ed-*/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.7z
+
+# Any other private / licensed dataset location and generated
+# patient-level exports of research data.
+data/
+datasets/
+raw_data/
+private/
+exports/
+*_patient_level*.csv
+*_patient_level*.json
+
+# Generated (non-source) copies of processed research data.
+data/processed/
+data/interim/
+data/raw/
+
+# Pipeline output derived from licensed research data. Reproducible at any
+# time with `venv/bin/python -m backend.ml.run_data_prep`; only the aggregate
+# Markdown report under docs/ is committed.
+reports/
+
+# --- Python virtual environments -------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version.local
+
+# --- Python build / cache artifacts ----------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+sdist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Test / coverage artifacts ---------------------------------------------
+.pytest_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# --- Notebooks --------------------------------------------------------------
+.ipynb_checkpoints/
+
+# --- Secrets / credentials (NEVER COMMIT) ----------------------------------
+.env
+.env.*
+!.env.example
+*.env.local
+secrets.json
+secrets.yaml
+secrets.yml
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+supabase/.env
+*.secret
+
+# --- Generated model artifacts (NEVER COMMIT) ------------------------------
+# Trained models, serialized estimators and their metadata.
+*.joblib
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+models/
+model_artifacts/
+artifacts/
+mlruns/
+wandb/
+runs/
+outputs/
+*.log
+
+# --- Node / frontend (future stack) ----------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.next/
+out/
+dist/
+.cache/
+coverage/
+.env.local
+
+# --- OS / editor noise -----------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Keep these tracked (explicit negations) -------------------------------
+!docs/
+!docs/**
+!requirements.txt
+!.env.example
+backend/ml/triagegeist.py
