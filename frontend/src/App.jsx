@@ -10,6 +10,9 @@ import DatasetExplorerPage from './pages/DatasetExplorerPage';
 import ScenarioComparisonPage from './pages/ScenarioComparisonPage';
 import ErrorAnalysisPage from './pages/ErrorAnalysisPage';
 import ExplainabilityPage from './pages/ExplainabilityPage';
+import ModelRegistryPage from './pages/ModelRegistryPage';
+import ExperimentPage from './pages/ExperimentPage';
+import DriftPage from './pages/DriftPage';
 import { useState } from 'react';
 
 export default function App() {
@@ -35,6 +38,7 @@ export default function App() {
               <Route path="/registry" element={<ModelRegistryPage />} />
               <Route path="/experiments" element={<ExperimentPage />} />
               <Route path="/drift" element={<DriftPage />} />
+              <Route path="/triagegeist" element={<SyntheticBenchmarkPage />} />
             </Routes>
           </main>
 

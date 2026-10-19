@@ -182,10 +182,17 @@ def run_phase2_experiment(
     fold_df = pd.DataFrame(fold_metrics_rows)
     fold_df.to_csv(reports_dir / "fold_metrics.csv", index=False)
 
-    # C. confusion_matrix.csv (CV aggregate and holdout for selected model)
+    # C. confusion_matrix.csv (CV aggregate for the selected model)
     rf_cm = candidate_cv[selected_model_name]["aggregate_confusion_matrix"]
     cm_df = pd.DataFrame(rf_cm, index=evaluate.LABEL_NAMES, columns=evaluate.LABEL_NAMES)
     cm_df.to_csv(reports_dir / "confusion_matrix.csv")
+
+    # D. drift / shift analysis on the held-out split
+    drift_payload = evaluate.build_drift_payload(train_df, test_df)
+    (reports_dir / "drift_analysis.json").write_text(
+        json.dumps(drift_payload, indent=2, default=str), encoding="utf-8"
+    )
+    log.info("Wrote drift_analysis.json")
 
     # D. model_evaluation.json
     full_eval_payload = {
@@ -204,15 +211,16 @@ def run_phase2_experiment(
                 "fold_diagnostics": candidate_cv[c]["fold_diagnostics"],
             }
             for c in candidates
-        },
-        "selected_model": {
-            "name": selected_model_name,
-            "artifact": str(model_artifact_path),
-            "holdout_metrics": candidate_holdout[selected_model_name],
-            "cv_summary": candidate_cv[selected_model_name]["summary"],
-            "sample_shap_explanation": shap_explanation,
-        },
-    }
+        },                "selected_model": {
+                    "name": selected_model_name,
+                    "artifact": str(model_artifact_path),
+                    "holdout_metrics": candidate_holdout[selected_model_name],
+                    "cv_summary": candidate_cv[selected_model_name]["summary"],
+                    "sample_shap_explanation": shap_explanation,
+                },
+                "drift_analysis": drift_payload,
+            }
+
 
     with open(reports_dir / "model_evaluation.json", "w", encoding="utf-8") as f:
         json.dump(full_eval_payload, f, indent=2, default=str)

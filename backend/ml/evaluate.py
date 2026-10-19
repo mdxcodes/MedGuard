@@ -207,4 +207,75 @@ def run_grouped_cv_oof(
         "classes": config.ESI_LABELS,
         "n_samples": len(X),
     }
+DERIVED_FEATURES_PLACEHOLDER = ("shock_index", "pulse_pressure", "abnormal_vital_count")
+def build_drift_payload(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+) -> dict[str, Any]:
+    """A minimal dataset-shift diagnostic computed on a held-out patient-grouped split.
+
+    This is intentionally conservative: it reports feature availability differences,
+    distributional centroid differences for key numeric triage features, and the
+    class distribution on each split. It does NOT fabricate covariate-shift
+    statistics between the real MIMIC cohort and any external dataset.
+    """
+    def _numeric_profile(df: pd.DataFrame) -> dict[str, float | None]:
+        profile: dict[str, float | None] = {}
+        numeric_features = (
+            "temperature",
+            "heartrate",
+            "resprate",
+            "o2sat",
+            "sbp",
+            "dbp",
+            "shock_index",
+            "pulse_pressure",
+            "abnormal_vital_count",
+        )
+        for col in numeric_features:
+            if col not in df.columns:
+                profile[col] = None
+                continue
+            series = pd.to_numeric(df[col], errors="coerce")
+            if series.notna().sum() == 0:
+                profile[col] = None
+            else:
+                profile[col] = float(series.mean())
+        return profile
+
+    train_num = _numeric_profile(train_df)
+    test_num = _numeric_profile(test_df)
+
+    class_dist = {
+        "train": {f"ESI {int(k)}": int(v) for k, v in train_df[config.TARGET_COLUMN].value_counts().sort_index().items()},
+        "test": {f"ESI {int(k)}": int(v) for k, v in test_df[config.TARGET_COLUMN].value_counts().sort_index().items()},
+    }
+
+    missing_rate = {}
+    for col in config.MISSINGNESS_FEATURES:
+        if col not in train_df.columns or col not in test_df.columns:
+            continue
+        missing_rate[col] = {
+            "train": float(train_df[col].mean()),
+            "test": float(test_df[col].mean()),
+        }
+
+    return {
+        "split": {
+            "train_rows": int(len(train_df)),
+            "train_patients": int(train_df[config.SUBJECT_ID_COLUMN].nunique()),
+            "test_rows": int(len(test_df)),
+            "test_patients": int(test_df[config.SUBJECT_ID_COLUMN].nunique()),
+        },
+        "class_distribution": class_dist,
+        "numeric_profile": {
+            "train": train_num,
+            "test": test_num,
+            "difference": {
+                k: (test_num[k] - train_num[k]) if (train_num[k] is not None and test_num[k] is not None) else None for k in train_num
+            },
+        },
+        "missingness_difference": missing_rate,
+    }
+
 
