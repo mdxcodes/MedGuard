@@ -13,6 +13,7 @@ import ExplainabilityPage from './pages/ExplainabilityPage';
 import ModelRegistryPage from './pages/ModelRegistryPage';
 import ExperimentPage from './pages/ExperimentPage';
 import DriftPage from './pages/DriftPage';
+import SyntheticBenchmarkPage from './pages/SyntheticBenchmarkPage';
 import { useState } from 'react';
 
 export default function App() {
