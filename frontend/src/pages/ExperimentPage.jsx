@@ -1,51 +1,110 @@
 import { useEffect, useState } from 'react';
+import { Beaker } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
+import { PageShell, SectionCard, LoadingState } from '../components/ui/states';
 
 export default function ExperimentPage() {
   const [exps, setExps] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({name:'test', model_name:'random_forest'});
+  const [form, setForm] = useState({ name: 'benchmark-1', model_name: 'random_forest' });
   const [error, setError] = useState(null);
 
-  async function load() {
-    const r = await fetch('/api/experiments');
-    if (r.ok) setExps(await r.json());
-  }
+  useEffect(() => {
+    fetch('/api/experiments')
+      .then(r => r.ok ? r.json() : [])
+      .then(setExps)
+      .catch(() => setExps([]));
+  }, []);
 
-  useEffect(() => { load(); }, []);
-
-  async function run() {
+  const run = async () => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch('/api/experiments/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form)});
-      if (!r.ok) throw new Error('failed');
-      await load();
-    } catch (e) { setError('run failed'); }
+      const r = await fetch('/api/experiments/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
+      });
+      if (!r.ok) throw new Error('Experiment rejected');
+      fetch('/api/experiments')
+        .then(r => r.ok ? r.json() : [])
+        .then(setExps);
+    } catch (e) { setError('Experiment run failed — check server logs.'); }
     finally { setLoading(false); }
-  }
+  };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <DisclaimerBanner />
-      <h1 className="text-3xl font-extrabold tracking-tighter text-navy">Experiment Workspace</h1>
-      <div className="bg-white rounded-2xl border border-border shadow-card p-4 space-y-3">
-        <input className="border p-2 text-sm rounded" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-        <select className="border p-2 text-sm rounded" value={form.model_name} onChange={e=>setForm({...form,model_name:e.target.value})}>
-          <option value="random_forest">random_forest</option>
-          <option value="logistic_regression">logistic_regression</option>
-        </select>
-        <button disabled={loading} onClick={run} className="bg-navy text-white px-4 py-2 rounded">{loading?'Running...':'Run'}</button>
-        {error && <div className="text-xs text-rose-600">{error}</div>}
-      </div>
-      <div className="bg-white rounded-2xl border border-border shadow-card p-4">
-        <h2 className="font-bold mb-2">History</h2>
-        <table className="w-full text-sm">
-          <thead><tr><th className="text-left">ID</th><th>Name</th><th>Status</th><th>Model</th></tr></thead>
-          <tbody>
-            {exps.map((e,i)=>(<tr key={i}><td>{e.id}</td><td>{e.name}</td><td>{e.status}</td><td>{e.config?.model_name}</td></tr>))}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-8">
+      <PageShell
+        title="Experiment workspace"
+        subtitle="Submit a supported model configuration for evaluation. Runs are local-only and cannot modify the canonical baseline."
+        breadcrumb="Advanced Analysis · Experiments"
+      />
+
+      <SectionCard title="Run a new experiment" badge="Local execution">
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div>
+            <label className="text-[10px] font-mono text-muted uppercase tracking-wider mb-2 block">Experiment name</label>
+            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-3 rounded-lg border border-border bg-surface focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary text-sm font-medium" />
+          </div>
+          <div>
+            <label className="text-[10px] font-mono text-muted uppercase tracking-wider mb-2 block">Model family</label>
+            <select value={form.model_name} onChange={e => setForm({ ...form, model_name: e.target.value })} className="w-full px-3 py-3 rounded-lg border border-border bg-surface focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary text-sm font-medium">
+              <option value="random_forest">Random Forest</option>
+              <option value="logistic_regression">Logistic Regression</option>
+              <option value="dummy">Dummy Classifier</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button disabled={loading} onClick={run} className="w-full bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-5 py-3 rounded-xl shadow-lg shadow-primary/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? 'Running…' : 'Run experiment'}
+            </button>
+          </div>
+        </div>
+        {error && (
+          <div className="mt-3 rounded-lg border border-error/20 bg-error-bg p-3 text-xs text-error">
+            {error}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Experiment history" badge={`${exps.length} run${exps.length !== 1 ? 's' : ''}`} icon={<Beaker className="w-4 h-4" />}>
+        {exps.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="mx-auto w-10 h-10 rounded-full bg-surface-lift text-muted flex items-center justify-center">
+              <span className="text-[24px]">🧪</span>
+            </div>
+            <div className="text-sm font-medium text-primary mt-3">No experiments yet</div>
+            <div className="text-[10px] text-muted mt-1">Submit a configuration above to get started.</div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-muted border-b border-border">
+                  <th className="py-3 pr-3 font-medium">ID</th>
+                  <th className="py-3 pr-3 font-medium">Name</th>
+                  <th className="py-3 pr-3 font-medium">Status</th>
+                  <th className="py-3 pr-3 font-medium text-right">Model</th>
+                  <th className="py-3 pr-3 font-medium text-right">Started</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {exps.map((e, i) => (
+                  <tr key={i}>
+                    <td className="py-3 pr-3 font-mono font-medium text-secondary">{e.id}</td>
+                    <td className="py-3 pr-3 font-medium text-primary">{e.name}</td>
+                    <td className="py-3 pr-3 text-right">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${e.status === 'completed' ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'} px-2 py-0.5 rounded`}>
+                        {e.status}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-3 text-right font-mono text-secondary">{e.config?.model_name ?? '—'}</td>
+                    <td className="py-3 pr-3 text-right font-mono text-secondary">{new Date(e.started_at ?? 0).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
     </div>
   );
 }

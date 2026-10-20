@@ -1,6 +1,7 @@
 import { Database, ShieldCheck, AlertTriangle } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { useEffect, useState } from 'react';
+import { PageShell, SectionCard, StatMetric, LoadingState } from '../components/ui/states';
 
 export default function ModelRegistryPage() {
   const [active, setActive] = useState(null);
@@ -12,8 +13,8 @@ export default function ModelRegistryPage() {
     async function load() {
       try {
         const [a, v] = await Promise.all([
-          fetch('/api/models/active').then(r => r.json()),
-          fetch('/api/models/versions').then(r => r.json()),
+          fetch('/api/models/active').then(r => r.ok ? r.json() : null),
+          fetch('/api/models/versions').then(r => r.ok ? r.json() : null),
         ]);
         setActive(a);
         setVersions(Array.isArray(v) ? v : [v]);
@@ -26,62 +27,93 @@ export default function ModelRegistryPage() {
     load();
   }, []);
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (error) return <div className="p-6 text-rose-600">{error}</div>;
-
-  const integ = active?.integrity || {};
-  const meta = active?.metadata || {};
-
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <DisclaimerBanner />
-      <header className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Database className="w-6 h-6 text-teal" />
-          <h1 className="text-3xl font-extrabold tracking-tighter text-navy">Model Registry</h1>
-        </div>
-        <p className="text-sm text-text-secondary max-w-3xl">
-          Lightweight registry with integrity status. No runtime model switching.
-        </p>
-      </header>
+    <div className="space-y-8">
+      <PageShell
+        title="Model registry"
+        subtitle="Lightweight registry with artifact-integrity status. No runtime model switching — activation is controlled by deployment configuration."
+        breadcrumb="Advanced Analysis · Model Registry"
+      />
 
-      <section className="bg-white rounded-2xl border border-border shadow-card p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-navy">Active Model</h2>
-          {integ.ok ? (
-            <span className="inline-flex items-center gap-1 text-xs bg-teal-muted/40 text-teal px-2 py-1 rounded border border-teal/20">
-              <ShieldCheck className="w-3 h-3" /> Integrity OK
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-xs bg-rose-50 text-rose-700 px-2 py-1 rounded border border-rose-200">
-              <AlertTriangle className="w-3 h-3" /> Integrity Issues
-            </span>
-          )}
+      {loading && <LoadingState message="Loading registry…" />}
+      {error && (
+        <div className="rounded-xl border border-error/20 bg-error-bg p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-5 h-5 rounded-full bg-error flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-[14px]">💥</span>
+            </div>
+            <div className="flex-1">
+              <div className="font-bold text-error">Registry unavailable</div>
+              <div className="text-xs text-secondary mt-1">{error}</div>
+            </div>
+          </div>
         </div>
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
-          <div><span className="text-text-muted">Version:</span> <span className="font-mono">{active?.version}</span></div>
-          <div><span className="text-text-muted">Model:</span> {active?.model_name}</div>
-          <div><span className="text-text-muted">Dataset:</span> {meta.dataset}</div>
-          <div><span className="text-text-muted">Training rows/patients:</span> {meta.training_rows}/{meta.training_patients}</div>
-          <div><span className="text-text-muted">ESI Labels:</span> {JSON.stringify(meta.esi_labels)}</div>
-          <div><span className="text-text-muted">Target:</span> {meta.target}</div>
-        </div>
-        {integ.errors && integ.errors.length > 0 && (
-          <div className="text-xs text-rose-600">{JSON.stringify(integ.errors)}</div>
-        )}
-      </section>
+      )}
+      {!loading && !error && (
+        <>
+          <SectionCard title="Active model" badge={active?.version ?? '—'} icon={<ShieldCheck className="w-4 h-4" />}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">Serving model</div>
+                <div className="text-2xl font-extrabold text-primary">{active?.model_name ?? '—'}</div>
+                <div className="text-sm text-secondary mt-1">{active?.metadata?.dataset ?? '—'}</div>
+              </div>
+              {active?.integrity?.ok ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-success-bg text-success px-3 py-1.5 rounded-full border border-success/20">
+                  <ShieldCheck className="w-3 h-3" /> Integrity verified
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-error-bg text-error px-3 py-1.5 rounded-full border border-error/20">
+                  <AlertTriangle className="w-3 h-3" /> Integrity issues
+                </span>
+              )}
+            </div>
+            <div className="mt-4 grid sm:grid-cols-2 gap-4">
+              <StatMetric value={active?.metadata?.training_rows ?? '—'} label="Training rows" subtitle="Unique patients: {active?.metadata?.training_patients ?? '—'}" tone="info" />
+              <StatMetric value={JSON.stringify(active?.metadata?.esi_labels ?? [])} label="ESI labels" subtitle={`Target: ${active?.metadata?.target ?? '—'}`} tone="info" />
+            </div>
+            {active?.integrity?.errors && active.integrity.errors.length > 0 && (
+              <div className="mt-3 rounded-lg border border-error/20 bg-error-bg p-3 text-[10px] font-mono text-error">
+                {JSON.stringify(active.integrity.errors)}
+              </div>
+            )}
+          </SectionCard>
 
-      <section className="bg-white rounded-2xl border border-border shadow-card p-6">
-        <h2 className="text-lg font-bold text-navy mb-3">Versions</h2>
-        <table className="w-full text-sm">
-          <thead><tr className="text-text-muted"><th className="text-left py-2">Version</th><th className="text-left py-2">Model</th><th className="text-left py-2">Active</th></tr></thead>
-          <tbody>
-            {versions.map((v,i) => (
-              <tr key={i} className="border-t border-border-subtle"><td className="py-2 font-mono">{v.version}</td><td className="py-2">{v.model_name}</td><td className="py-2">{v.active ? 'Yes' : 'No'}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+          <SectionCard title="Registered versions" badge={versions.length}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-left text-muted border-b border-border">
+                    <th className="py-3 pr-3 font-medium">Version</th>
+                    <th className="py-3 pr-3 font-medium">Model</th>
+                    <th className="py-3 pr-3 font-medium text-right">Active</th>
+                    <th className="py-3 pr-3 font-medium text-right">Integrity</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {versions.map((v, i) => (
+                    <tr key={i}>
+                      <td className="py-3 pr-3 font-mono font-medium text-primary">{v.version}</td>
+                      <td className="py-3 pr-3 font-mono text-secondary">{v.model_name}</td>
+                      <td className="py-3 pr-3 text-right">
+                        {v.active ? <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-primary-soft text-primary px-2 py-0.5 rounded">Yes</span> : 'No'}
+                      </td>
+                      <td className="py-3 pr-3 text-right">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-success-bg text-success px-2 py-0.5 rounded">
+                          <ShieldCheck className="w-2.5 h-2.5" /> OK
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {versions.length === 0 && (
+                    <tr><td colSpan="4" className="py-6 text-center text-muted">No versions registered.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        </>
+      )}
     </div>
   );
 }

@@ -1,114 +1,62 @@
-# Final Demo Guide
+# MedGuard — Final Demo Guide (Synthetic-Only)
 
-## Quick Start
+**Repository:** /secondary/MedGuard  
+**Purpose:** Reproducible academic demonstration using synthetic data only.  
+**Not clinically validated — not for real triage decisions.**
 
-### Starting the Backend (FastAPI)
+## 1. Setup
 
+### Backend (FastAPI)
+Requirements: Python 3.14, `venv` at `./venv`.
 ```bash
 cd /secondary/MedGuard
-# Install dependencies
-pip install -r requirements.txt
-# Start the API server
-uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+venv/bin/python -m uvicorn backend.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-### Starting the Frontend (Vite/React)
-
+### Frontend (React + Vite)
+Requirements: Node.js, `frontend/node_modules` installed.
 ```bash
 cd /secondary/MedGuard/frontend
-npm install
-npm run dev
+npx vite --port 5173 --host 127.0.0.1
 ```
 
-The frontend will be available at `http://localhost:5173`.
+Open: http://127.0.0.1:5173/
 
-## Application Routes
+## 2. Demonstration Sequence
 
-| Route | Description |
-|-------|-------------|
-| `/` | Root page — assessment submission interface |
-| `/assessment` | Triage assessment form |
-| `/prediction` | Model prediction display |
-| `/performance` | Model performance metrics and confusion matrix |
-| `/dataset` | Dataset explorer and profile |
-| `/compare` | Scenario comparison tool |
-| `/errors` | Error analysis workbench |
-| `/explain` | Explainability Explorer and SHAP |
-| /registry | Model version registry and artifact integrity |
-| /experiments | Reproducible experiment runner |
-| /drift | Probability calibration and drift detection |
+1. **Overview (`/`)** — Project identity, research disclaimer, synthetic-only notice.
+2. **Assessment (`/assessment`)** — Enter synthetic vitals (e.g. temp 98.6, HR 88, RR 16, O2 98, SBP 120, DBP 80, pain 3, transport AMBULANCE, complaint CHEST PAIN). Submit → real model inference via `POST /api/predict`.
+3. **Prediction (`/prediction`)** — View real predicted ESI level, class probabilities (all 5 levels), max probability, SHAP explanation, research disclaimer.
+4. **Performance (`/performance`)** — Verified CV and holdout metrics, confusion matrix, per-class table, limitations panel.
+5. **Dataset Explorer (`/dataset`)** — Aggregate MIMIC-IV-ED demo stats, class distribution, missingness, preprocessing transparency, limitations.
+6. **Scenario Comparison (`/compare`)** — Two independent synthetic assessments submitted to the real API; side-by-side results.
+7. **Error Analysis (`/errors`)** — Out-of-fold error categories, filters, detail view.
+8. **Explainability (`/explain`)** — Global SHAP feature importance (mean |SHAP|), methodology, limitations.
+9. **Triagegeist Benchmark (`/triagegeist`)** — Separate synthetic benchmark: dataset profile, model results table, ESI class distribution, synthetic-data disclaimer.
+10. **Model Registry (`/registry`)** — Active model version + integrity status.
+11. **Experiments (`/experiments`)** — Experiment submission + history.
+12. **Drift (`/drift`)** — Drift analysis placeholder.
 
-## Triagegeist Benchmark Section
+## 3. Expected Behavior
 
-A distinct **Synthetic Benchmark** section is available in the frontend:
+- Every route renders without a blank screen.
+- `/predict` returns real model output (not hardcoded), with ESI probabilities summing to ~1 and ESI 5 = 0.0 (absent class).
+- Invalid inputs return structured validation errors (no stack traces).
+- Missing optional artifacts (e.g. global SHAP) show "unavailable" states, not crashes.
+- All disclaimers visible: "Not clinically validated. Educational research only."
 
-- **Path**: accessible via the navigation menu or at `/synthetic-benchmark`
-- **Disclaimer**: "Research-only benchmark over the Triagegeist synthetic dataset. Results here are separated
-  from the real-data MIMIC-IV-ED baseline and must not be presented as clinically comparable."
-- **Shows**:
-  - Verified dataset profile and provenance
-  - Synthetic-data disclaimer
-  - Model and feature configuration (DummyClassifier / Logistic Regression / Random Forest)
-  - Evaluation protocol (patient-grouped splits, triage-time features only)
-  - Class distribution (ESI 1-5)
-  - Confusion matrix and metrics per model
-  - Limitations and supported comparisons
-- **Clearly separated** from real-data results — production predictions remain on the
-  canonical MIMIC-IV-ED model.
+## 4. Known Limitations
 
-## Running the Triagegeist Benchmark Training
+- ESI 4 has only 2 labeled examples; ESI 5 has 0 in the MIMIC demo → those metrics are unstable / not learnable.
+- Triagegeist is a separate synthetic benchmark; its metrics are not comparable to MIMIC.
+- No real browser automation was used to confirm pixel-level rendering (routes verified via HTTP 200 + build success).
+- No deployment to a hosted environment performed.
 
-```bash
-cd /secondary/MedGuard
-PYTHONPATH=/secondary/MedGuard:$PYTHONPATH python3 reports/triagegeist/train_benchmark.py
-```
+## 5. Commands Reference
 
-This produces `reports/triagegeist/benchmark_results.json` with:
-
-- Per-model balanced accuracy, macro-F1, quadratic weighted kappa
-- Per-class precision/recall/F1 and support
-- Confusion matrices
-- Patient counts (80K train / 20K test from unique patients)
-
-## Assessment and Prediction Flow
-
-1. Navigate to `/assessment` or `/`
-2. Fill in triage vital signs (temperature, heartrate, respiratory rate, O2 saturation,
-   systolic/diastolic blood pressure, pain score)
-3. Submit → `/prediction` shows the predicted ESI level with probability scores
-4. The prediction uses the trained MIMIC-IV-ED model pipeline (not Triagegeist)
-
-## Important Disclaimers
-
-- **This is not a clinically validated triage system** and must not be presented as
-  suitable for actual triage decisions.
-- Results are for **research and academic demonstration only**.
-- Triagegeist benchmark results are **synthetic-only** and must not be presented as
-  directly comparable to real clinical performance.
-- The canonical model is trained on MIMIC-IV-ED; Triagegeist is a separate synthetic
-  dataset for benchmarking purposes only.
-- ESI Level 4 and Level 5 are sparsely populated; models may show reduced performance
-  on these classes.
-
-## Environment Configuration
-
-- Copy `.env.example` to `.env` and set required values.
-- No secrets or credentials should be committed; use `sites_set_secret` for server-side
-  API keys if deploying to Cloudflare Sites.
-- `.gitignore` excludes datasets, secrets, and private generated files.
-
-## Testing
-
-```bash
-# Backend tests
-cd /secondary/MedGuard
-python -m pytest tests/
-
-# Frontend tests
-cd /secondary/MedGuard/frontend
-npm test
-
-# Frontend build
-cd /secondary/MedGuard/frontend
-npm run build
-```
+| Purpose | Command |
+|---------|---------|
+| Backend tests | `cd /secondary/MedGuard && venv/bin/python -m pytest tests/ -v` |
+| Frontend tests | `cd /secondary/MedGuard/frontend && npx vitest run` |
+| Frontend build | `cd /secondary/MedGuard/frontend && npx vite build` |
+| Triagegeist benchmark | `cd /secondary/MedGuard && PYTHONPATH=. venv/bin/python reports/triagegeist/train_benchmark.py` |

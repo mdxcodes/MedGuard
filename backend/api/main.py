@@ -53,6 +53,10 @@ try:
     from backend.api.experiment_endpoint import run_new_experiment, list_exps, get_exp
 except Exception:
     run_new_experiment = None; list_exps = None; get_exp = None
+try:
+    from backend.api.triagegeist_endpoint import triagegeist_status
+except Exception:
+    triagegeist_status = None
 from backend.api.schemas import AssessmentRequest, ModelInfoResponse, PredictResponse
 
 log = logging.getLogger("medguard.api.main")
@@ -151,6 +155,12 @@ def create_app() -> FastAPI:
     def exp_get(exp_id: str):
         if get_exp is None: raise HTTPException(status_code=500, detail="unavailable")
         return get_exp(exp_id)
+
+    @app.get("/triagegeist/status")
+    def triagegeist_status_endpoint():
+        if triagegeist_status is None:
+            raise HTTPException(status_code=500, detail="Triagegeist endpoint not available")
+        return triagegeist_status()
 
     @app.get("/export/report")
     def export_report():

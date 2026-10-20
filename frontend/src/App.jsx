@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import Footer from './components/Footer';
+import ErrorBoundary from './components/ErrorBoundary';
 import OverviewPage from './pages/OverviewPage';
 import AssessmentPage from './pages/AssessmentPage';
 import PredictionPage from './pages/PredictionPage';
@@ -16,45 +18,69 @@ import DriftPage from './pages/DriftPage';
 import SyntheticBenchmarkPage from './pages/SyntheticBenchmarkPage';
 import { useState } from 'react';
 
+const PAGE_TITLES = {
+  '/': 'Overview',
+  '/assessment': 'New Assessment',
+  '/prediction': 'Prediction Results',
+  '/performance': 'Model Performance',
+  '/methodology': 'Methodology',
+  '/dataset': 'Dataset Explorer',
+  '/compare': 'Scenario Comparison',
+  '/errors': 'Error Analysis',
+  '/explain': 'Explainability',
+  '/registry': 'Model Registry',
+  '/experiments': 'Experiments',
+  '/drift': 'Dataset Drift',
+  '/triagegeist': 'Synthetic Benchmark',
+};
+
+const wrap = (Component) => () => (
+  <ErrorBoundary>
+    <Component />
+  </ErrorBoundary>
+);
+
+const WrappedOverview = wrap(OverviewPage);
+const WrappedAssessment = wrap(AssessmentPage);
+const WrappedPrediction = wrap(PredictionPage);
+const WrappedPerformance = wrap(PerformancePage);
+const WrappedMethodology = wrap(MethodologyPage);
+const WrappedDataset = wrap(DatasetExplorerPage);
+const WrappedScenario = wrap(ScenarioComparisonPage);
+const WrappedErrorAnalysis = wrap(ErrorAnalysisPage);
+const WrappedExplainability = wrap(ExplainabilityPage);
+const WrappedModelRegistry = wrap(ModelRegistryPage);
+const WrappedExperiments = wrap(ExperimentPage);
+const WrappedDrift = wrap(DriftPage);
+const WrappedSyntheticBenchmark = wrap(SyntheticBenchmarkPage);
+
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-surface flex">
+      <div className="min-h-screen bg-page flex flex-col">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex-1 md:ml-[260px] min-w-0">
+        <div className="flex-1 flex flex-col md:ml-[260px]">
           <Header onMenu={() => setSidebarOpen(o => !o)} />
-          <main role="main" className="max-w-7xl mx-auto px-5 md:px-8 py-8 md:py-10">
+          <main role="main" className="flex-1 max-w-7xl mx-auto px-5 md:px-8 py-8 md:py-10 w-full">
             <Routes>
-              <Route path="/" element={<OverviewPage />} />
-              <Route path="/assessment" element={<AssessmentPage />} />
-              <Route path="/prediction" element={<PredictionPage />} />
-              <Route path="/performance" element={<PerformancePage />} />
-              <Route path="/methodology" element={<MethodologyPage />} />
-              <Route path="/dataset" element={<DatasetExplorerPage />} />
-              <Route path="/compare" element={<ScenarioComparisonPage />} />
-              <Route path="/errors" element={<ErrorAnalysisPage />} />
-              <Route path="/explain" element={<ExplainabilityPage />} />
-              <Route path="/registry" element={<ModelRegistryPage />} />
-              <Route path="/experiments" element={<ExperimentPage />} />
-              <Route path="/drift" element={<DriftPage />} />
-              <Route path="/triagegeist" element={<SyntheticBenchmarkPage />} />
+              <Route path="/" element={<WrappedOverview />} />
+              <Route path="/assessment" element={<WrappedAssessment />} />
+              <Route path="/prediction" element={<WrappedPrediction />} />
+              <Route path="/performance" element={<WrappedPerformance />} />
+              <Route path="/methodology" element={<WrappedMethodology />} />
+              <Route path="/dataset" element={<WrappedDataset />} />
+              <Route path="/compare" element={<WrappedScenario />} />
+              <Route path="/errors" element={<WrappedErrorAnalysis />} />
+              <Route path="/explain" element={<WrappedExplainability />} />
+              <Route path="/registry" element={<WrappedModelRegistry />} />
+              <Route path="/experiments" element={<WrappedExperiments />} />
+              <Route path="/drift" element={<WrappedDrift />} />
+              <Route path="/triagegeist" element={<WrappedSyntheticBenchmark />} />
             </Routes>
           </main>
-
-          {/* Minimal footer */}
-          <footer className="max-w-7xl mx-auto px-5 md:px-8 py-6 border-t border-border-subtle mt-auto">
-            <div className="flex flex-wrap items-center gap-4 text-[11px] text-text-muted font-mono">
-              <span>MedGuard · Triage One</span>
-              <span>·</span>
-              <span>v0.2.0-demo</span>
-              <span>·</span>
-              <span>Educational research prototype</span>
-              <span>·</span>
-              <span>Not clinically validated</span>
-            </div>
-          </footer>
+          <Footer />
         </div>
       </div>
     </BrowserRouter>

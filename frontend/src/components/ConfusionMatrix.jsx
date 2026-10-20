@@ -17,15 +17,15 @@ export default function ConfusionMatrix({
   });
 
   const getCellColor = (value, isDiagonal) => {
-    if (max === 0) return 'bg-slate-50';
+    if (max === 0) return 'bg-surface-soft';
     const intensity = value / max;
     if (isDiagonal) {
       // Teal for correct predictions
       return `bg-teal/${Math.min(90, Math.round(intensity * 100))}`;
     }
     // Slate/rose for misclassifications - subtle
-    if (intensity < 0.2) return 'bg-slate-50';
-    if (intensity < 0.4) return 'bg-rose-50';
+    if (intensity < 0.2) return 'bg-surface-soft';
+    if (intensity < 0.4) return 'bg-rose-900/20';
     if (intensity < 0.6) return 'bg-rose-100';
     if (intensity < 0.8) return 'bg-rose-200';
     return 'bg-rose-300';
@@ -41,9 +41,9 @@ export default function ConfusionMatrix({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-border shadow-card p-6">
+    <div className="bg-surface rounded-2xl border border-border shadow-card p-6">
       <div className="mb-4">
-        <h3 className="text-base font-bold text-navy tracking-tight">{title}</h3>
+        <h3 className="text-base font-bold text-primary tracking-tight">{title}</h3>
         {subtitle && (
           <p className="text-xs text-text-muted mt-1 font-mono">{subtitle}</p>
         )}

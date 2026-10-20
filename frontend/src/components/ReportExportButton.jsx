@@ -39,7 +39,7 @@ export default function ReportExportButton({ className = '' }) {
         {loading ? 'Generating...' : 'Export Research Report (PDF)'}
         <Download className="w-4 h-4" />
       </button>
-      {error && <div className="text-xs text-rose-600 mt-1">{error}</div>}
+      {error && <div className="text-xs text-rose-400 mt-1">{error}</div>}
     </div>
   );
 }

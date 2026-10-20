@@ -9,10 +9,10 @@ export default function MetricChart() {
   ];
 
   return (
-    <div className="rounded-2xl bg-white border border-border shadow-card p-5">
+    <div className="rounded-2xl bg-surface border border-border shadow-card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-navy tracking-tight">Cross-Validation Performance (5-fold grouped)</h3>
-        <span className="text-[10px] font-mono text-text-muted bg-slate-50 px-2 py-0.5 rounded-md border border-border-subtle">Macro-F1 ± std</span>
+        <h3 className="font-semibold text-primary tracking-tight">Cross-Validation Performance (5-fold grouped)</h3>
+        <span className="text-[10px] font-mono text-text-muted bg-surface-soft px-2 py-0.5 rounded-md border border-border-subtle">Macro-F1 ± std</span>
       </div>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -31,7 +31,7 @@ export default function MetricChart() {
       </div>
       <div className="grid grid-cols-4 gap-2 mt-3 text-center">
         {data.map(d => (
-          <div key={d.model} className={`rounded-lg py-2 text-xs ${d.label === 'Selected' ? 'bg-teal-muted/40 text-teal' : 'bg-slate-50 text-text-secondary'}`}>
+          <div key={d.model} className={`rounded-lg py-2 text-xs ${d.label === 'Selected' ? 'bg-teal-900/40 text-teal' : 'bg-surface-soft text-text-secondary'}`}>
             <div className="font-extrabold text-sm">{d.f1.toFixed(2)}</div>
             <div className="font-mono text-[10px] opacity-70">{d.model}</div>
           </div>

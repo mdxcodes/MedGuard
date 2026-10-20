@@ -1,29 +1,22 @@
 import { useState, useMemo } from 'react';
 import { AlertTriangle, BarChart3, Filter, Search, Info } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
+import { PageShell, SectionCard } from '../components/ui/states';
+
 const ESI_COLORS = {
-  1: 'bg-rose-100 text-rose-800 border-rose-200',
-  2: 'bg-amber-100 text-amber-800 border-amber-200',
-  3: 'bg-teal-100 text-teal-800 border-teal-200',
-  4: 'bg-slate-100 text-slate-800 border-slate-200',
-  5: 'bg-slate-100 text-slate-600 border-slate-200',
+  1: 'text-rose-600',
+  2: 'text-amber-600',
+  3: 'text-teal-600',
+  4: 'text-slate-600',
+  5: 'text-slate-400',
 };
 
 function EsiBadge({ level }) {
-  const cls = ESI_COLORS[level] || 'bg-slate-100 text-slate-800 border-slate-200';
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${cls}`}>ESI {level}</span>;
-}
-
-function ErrorCategoryBadge({ cat }) {
-  if (!cat) return null;
-  const map = {
-    adjacent: 'bg-amber-50 text-amber-700 border-amber-200',
-    multi_level: 'bg-rose-50 text-rose-700 border-rose-200',
-    other: 'bg-slate-50 text-slate-700 border-slate-200',
-  };
-  const cls = map[cat] || map.other;
-  const label = cat === 'adjacent' ? 'Adjacent (±1)' : cat === 'multi_level' ? 'Multi-level (>1)' : 'Other';
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${cls}`}>{label}</span>;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${ESI_COLORS[level] || 'text-slate-600'}-100 ${ESI_COLORS[level] || 'text-slate-600'} border-${ESI_COLORS[level] || 'slate'}-200`}>
+      ESI {level}
+    </span>
+  );
 }
 
 export default function ErrorAnalysisPage() {
@@ -61,135 +54,141 @@ export default function ErrorAnalysisPage() {
   }, [records]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <DisclaimerBanner />
-
-      <header className="space-y-2">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-6 h-6 text-amber-600" />
-          <h1 className="text-3xl font-extrabold tracking-tighter text-navy">Error Analysis Workbench</h1>
-        </div>
-        <p className="text-sm text-text-secondary leading-relaxed max-w-3xl">
-          Out-of-fold (patient-grouped) prediction errors from cross-validation of the selected Random Forest model.
-          No patient identifiers are exposed. All records come from samples evaluated on folds where that patient's
-          data was held out. Synthetic demo scenarios are separate from these evaluation records.
-        </p>
-        <div className="text-xs text-text-muted font-mono bg-slate-50 px-2 py-1 rounded border border-border-subtle inline-block">
-          Evaluation protocol: {records?.[0]?.evaluation_protocol || 'patient_grouped_5fold_cv_out_of_fold'}
-        </div>
-      </header>
+    <div className="space-y-8">
+      <PageShell
+        title="Error analysis workbench"
+        subtitle="Out-of-fold prediction errors from patient-grouped cross-validation. No patient identifiers are exposed. All records come from samples evaluated on folds where that patient's data was held out."
+        breadcrumb="Research · Error Analysis"
+      />
 
       {/* Stats */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: 'Total samples', value: stats.total },
-          { label: 'Correct', value: stats.correct },
-          { label: 'Misclassified', value: stats.mis, tone: 'amber' },
-          { label: 'Accuracy (OOF)', value: `${stats.acc}%` },
-          { label: 'Adjacent (±1)', value: stats.adj },
-          { label: 'Multi-level (>1)', value: stats.multi, tone: 'rose' },
-        ].map(s => (
-          <div key={s.label} className={`rounded-xl border border-border-subtle bg-white p-3 ${s.tone === 'amber' ? 'bg-amber-50/40' : s.tone === 'rose' ? 'bg-rose-50/40' : 'bg-white'}`}>
-            <div className="text-xs font-mono text-text-muted uppercase tracking-wider">{s.label}</div>
-            <div className="text-2xl font-extrabold text-navy mt-1">{s.value}</div>
-          </div>
-        ))}
-      </section>
+      <SectionCard title="Out-of-fold summary" badge={records?.[0]?.evaluation_protocol || 'patient_grouped_5fold_cv_out_of_fold'}>
+        <div className="grid sm:grid-cols-6 gap-3">
+          {[
+            { label: 'Total samples', value: stats.total },
+            { label: 'Correct', value: stats.correct },
+            { label: 'Misclassified', value: stats.mis, tone: 'warning' },
+            { label: 'OOF accuracy', value: `${stats.acc}%` },
+            { label: 'Adjacent (±1)', value: stats.adj },
+            { label: 'Multi-level (>1)', value: stats.multi, tone: 'error' },
+          ].map(s => (
+            <div key={s.label} className={`rounded-lg border border-border bg-surface p-4 ${s.tone === 'warning' ? 'bg-warning-bg/40' : s.tone === 'error' ? 'bg-error-bg/40' : 'bg-surface'}`}>
+              <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">{s.label}</div>
+              <div className="text-2xl font-extrabold text-primary">{s.value}</div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
       {/* Filters */}
-      <section className="bg-white rounded-2xl border border-border shadow-card p-4">
+      <SectionCard title="Filters">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-text-muted" />
-            <span className="text-sm font-medium text-navy">Filters</span>
+            <Filter className="w-4 h-4 text-muted" />
+            <span className="text-sm font-medium text-primary">Filters</span>
           </div>
-          <select value={trueFilter} onChange={e => setTrueFilter(e.target.value)} className="text-sm border border-border-subtle rounded-lg px-2 py-1.5">
+          <select value={trueFilter} onChange={e => setTrueFilter(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-1.5 font-mono text-xs">
             <option value="all">True: All</option>
-            {[1,2,3,4,5].map(l => <option key={l} value={l}>True: ESI {l}</option>)}
+            {[1, 2, 3, 4, 5].map(l => <option key={l} value={l}>True: ESI {l}</option>)}
           </select>
-          <select value={predFilter} onChange={e => setPredFilter(e.target.value)} className="text-sm border border-border-subtle rounded-lg px-2 py-1.5">
+          <select value={predFilter} onChange={e => setPredFilter(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-1.5 font-mono text-xs">
             <option value="all">Pred: All</option>
-            {[1,2,3,4,5].map(l => <option key={l} value={l}>Pred: ESI {l}</option>)}
+            {[1, 2, 3, 4, 5].map(l => <option key={l} value={l}>Pred: ESI {l}</option>)}
           </select>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
             <input type="checkbox" checked={errorOnly} onChange={e => setErrorOnly(e.target.checked)} className="rounded" />
-            Misclassified only
+            <span>Misclassified only</span>
           </label>
-          <div className="flex-1 min-w-[200px] relative">
-            <Search className="w-4 h-4 text-text-muted absolute left-2 top-1/2 -translate-y-1/2" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." className="w-full text-sm border border-border-subtle rounded-lg pl-8 pr-2 py-1.5" />
+          <div className="flex-1 min-w-[220px] relative">
+            <Search className="w-4 h-4 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="w-full text-sm border border-border rounded-lg pl-8 pr-3 py-1.5 font-mono text-xs" />
           </div>
-          <div className="text-xs text-text-muted ml-auto">
+          <div className="text-[10px] font-mono text-muted ml-auto">
             Showing {filtered.length} of {records.length}
           </div>
         </div>
-      </section>
+      </SectionCard>
 
       {/* Table */}
-      <section className="bg-white rounded-2xl border border-border shadow-card overflow-hidden">
-        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-border-subtle sticky top-0 z-10">
-              <tr>
-                <th className="text-left p-3 font-medium text-text-muted">True</th>
-                <th className="text-left p-3 font-medium text-text-muted">Pred</th>
-                <th className="text-left p-3 font-medium text-text-muted">Error</th>
-                <th className="text-left p-3 font-medium text-text-muted">Max Prob</th>
-                <th className="text-left p-3 font-medium text-text-muted">P(True)</th>
-                <th className="text-left p-3 font-medium text-text-muted">P(Pred)</th>
-                <th className="text-left p-3 font-medium text-text-muted">Fold</th>
-                <th className="text-left p-3 font-medium text-text-muted">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r, i) => (
-                <tr key={i} className={`border-b border-border-subtle hover:bg-slate-50/50 ${r.is_misclassified ? 'bg-amber-50/20' : ''}`}>
-                  <td className="p-3"><EsiBadge level={r.true_label} /></td>
-                  <td className="p-3"><EsiBadge level={r.pred_label} /></td>
-                  <td className="p-3">{r.is_misclassified ? <ErrorCategoryBadge cat={r.error_category} /> : <span className="text-xs text-teal font-medium">Correct</span>}</td>
-                  <td className="p-3 font-mono tabular-nums">{(r.max_prob * 100).toFixed(1)}%</td>
-                  <td className="p-3 font-mono tabular-nums">{(r.prob_true * 100).toFixed(1)}%</td>
-                  <td className="p-3 font-mono tabular-nums">{(r.prob_pred * 100).toFixed(1)}%</td>
-                  <td className="p-3 font-mono">{r.fold}</td>
-                  <td className="p-3">
-                    <button onClick={() => setSelected(r)} className="text-xs text-teal hover:underline">View</button>
-                  </td>
+      <SectionCard title="Error records" badge={`${filtered.length} record${filtered.length !== 1 ? 's' : ''}`}>
+        {filtered.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="mx-auto w-10 h-10 rounded-full bg-surface-lift text-muted flex items-center justify-center">
+              <span className="text-[24px]">🔍</span>
+            </div>
+            <div className="text-sm font-medium text-primary mt-3">No matching records</div>
+            <div className="text-[10px] text-muted mt-1">Try clearing some filters or toggling 'Misclassified only'.</div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="text-left text-muted border-b border-border">
+                  <th className="py-3 pr-3 font-medium">True</th>
+                  <th className="py-3 pr-3 font-medium">Pred</th>
+                  <th className="py-3 pr-3 font-medium">Error</th>
+                  <th className="py-3 pr-3 font-medium text-right">Max prob</th>
+                  <th className="py-3 pr-3 font-medium text-right">P(True)</th>
+                  <th className="py-3 pr-3 font-medium text-right">P(Pred)</th>
+                  <th className="py-3 pr-3 font-medium text-right">Fold</th>
+                  <th className="py-3 pr-3 font-medium text-right">Detail</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((r, i) => (
+                  <tr key={i} className={`${r.is_misclassified ? 'bg-warning-bg/30' : ''} hover:bg-surface-lift transition`}>
+                    <td className="py-3 pr-3"><EsiBadge level={r.true_label} /></td>
+                    <td className="py-3 pr-3"><EsiBadge level={r.pred_label} /></td>
+                    <td className="py-3 pr-3">
+                      {r.is_misclassified
+                        ? (r.error_category === 'adjacent' ? <span className="text-[10px] font-mono text-warning font-medium">Adjacent ±1</span> : r.error_category === 'multi_level' ? <span className="text-[10px] font-mono text-error font-medium">Multi-level</span> : <span className="text-[10px] font-mono text-secondary font-medium">Other</span>)
+                        : <span className="text-[10px] font-mono text-primary font-medium">Correct</span>}
+                    </td>
+                    <td className="py-3 pr-3 text-right font-mono tabular-nums text-secondary">{r.max_prob * 100}%</td>
+                    <td className="py-3 pr-3 text-right font-mono tabular-nums text-secondary">{r.prob_true * 100}%</td>
+                    <td className="py-3 pr-3 text-right font-mono tabular-nums text-secondary">{r.prob_pred * 100}%</td>
+                    <td className="py-3 pr-3 text-right font-mono tabular-nums text-secondary">{r.fold}</td>
+                    <td className="py-3 pr-3">
+                      <button onClick={() => setSelected(r)} className="text-[10px] font-medium text-primary hover:underline font-mono">View</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
       {/* Limitations */}
-      <section className="bg-slate-50 rounded-2xl border border-border-subtle p-4">
-        <div className="flex items-start gap-2">
-          <Info className="w-4 h-4 text-text-muted mt-0.5" />
-          <div className="text-xs text-text-muted leading-relaxed space-y-1">
-            <p><strong>Limitations:</strong> OOF predictions are from patient-grouped 5-fold CV on the modeling set (207 samples). ESI 4 has only 2 examples; ESI 5 has 0 labeled examples (absent). Adjacent errors (±1 ESI level) are often less clinically severe than multi-level jumps. These are aggregate evaluation patterns, not causal explanations. No patient identifiers or raw features beyond what the model used are exposed.</p>
-            <p>Protocol: {records?.[0]?.evaluation_protocol}. Generated from models trained without that patient's data in each fold.</p>
-          </div>
-        </div>
-      </section>
+      <SectionCard title="Limitations" badge="Read carefully" icon={<AlertTriangle className="w-4 h-4" />}>
+        <ul className="space-y-2 text-sm text-secondary leading-relaxed">
+          <li><strong className="text-primary">OOF predictions</strong> are from patient-grouped 5-fold CV on the modelling set (207 samples).</li>
+          <li><strong className="text-primary">ESI 4</strong> has only 2 examples; <strong className="text-primary">ESI 5</strong> has 0 labelled examples.</li>
+          <li>Adjacent errors (±1 ESI level) are often less clinically severe than multi-level jumps.</li>
+          <li>These are aggregate evaluation patterns — not causal explanations.</li>
+          <li>No patient identifiers or raw features beyond what the model used are exposed.</li>
+        </ul>
+      </SectionCard>
 
       {/* Detail modal */}
       {selected && (
-        <div className="fixed inset-0 bg-navy/50 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
-          <div className="bg-white rounded-2xl border border-border shadow-elevated max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-navy text-lg">Error Case Detail</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
+          <div className="fixed inset-0 bg-navy-deep/40 backdrop-blur-sm" onClick={() => setSelected(null)} />
+          <div className="bg-surface rounded-xl border border-border shadow-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-primary text-lg">Error case detail</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-text-muted">True:</span> <EsiBadge level={selected.true_label} /></div>
-              <div><span className="text-text-muted">Pred:</span> <EsiBadge level={selected.pred_label} /></div>
-              <div className="col-span-2"><span className="text-text-muted">Error:</span> {selected.is_misclassified ? <ErrorCategoryBadge cat={selected.error_category} /> : 'Correct'}</div>
-              <div><span className="text-text-muted">Max Prob:</span> <span className="font-mono">{(selected.max_prob*100).toFixed(2)}%</span></div>
-              <div><span className="text-text-muted">Fold:</span> <span className="font-mono">{selected.fold}</span></div>
-              <div><span className="text-text-muted">P(True):</span> <span className="font-mono">{(selected.prob_true*100).toFixed(2)}%</span></div>
-              <div><span className="text-text-muted">P(Pred):</span> <span className="font-mono">{(selected.prob_pred*100).toFixed(2)}%</span></div>
+              <div><span className="text-muted block">True:</span> <EsiBadge level={selected.true_label} /></div>
+              <div><span className="text-muted block">Pred:</span> <EsiBadge level={selected.pred_label} /></div>
+              <div className="col-span-2"><span className="text-muted block">Error:</span> {selected.is_misclassified ? selected.error_category : 'Correct'}</div>
+              <div><span className="text-muted block">Max prob:</span> <span className="font-mono text-secondary">{selected.max_prob * 100}%</span></div>
+              <div><span className="text-muted block">Fold:</span> <span className="font-mono text-secondary">{selected.fold}</span></div>
+              <div><span className="text-muted block">P(True):</span> <span className="font-mono text-secondary">{selected.prob_true * 100}%</span></div>
+              <div><span className="text-muted block">P(Pred):</span> <span className="font-mono text-secondary">{selected.prob_pred * 100}%</span></div>
             </div>
-            <div className="text-xs text-text-muted leading-relaxed bg-slate-50 p-3 rounded-lg border border-border-subtle">
-              This is an out-of-fold prediction for a sample in the evaluation set. No raw patient data or identifiers are shown. The confidence values shown are the model's predicted class probabilities for this out-of-fold evaluation case.
+            <div className="text-[10px] text-secondary leading-relaxed bg-surface-lift rounded-lg p-3 border border-border">
+              Out-of-fold prediction for a sample in the evaluation set. No raw patient data or identifiers are shown.
             </div>
-            <button onClick={() => setSelected(null)} className="w-full bg-navy text-white py-2 rounded-xl hover:bg-navy-soft transition">Close</button>
+            <button onClick={() => setSelected(null)} className="w-full bg-primary text-white py-2.5 rounded-xl hover:bg-primary-hover transition font-medium">Close</button>
           </div>
         </div>
       )}

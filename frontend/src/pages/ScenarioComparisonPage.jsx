@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
-import { BarChart3, ArrowRight, RefreshCcw, GitCompare, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { GitCompare, AlertCircle, CheckCircle2, RefreshCcw } from 'lucide-react';
 import AssessmentForm from '../components/AssessmentForm';
 import PredictionResults from '../components/PredictionResults';
-import SyntheticExamples from '../components/SyntheticExamples';
 import DisclaimerBanner from '../components/DisclaimerBanner';
+import { PageShell, SectionCard } from '../components/ui/states';
 
 const INITIAL = { temperature: '', heartrate: '', resprate: '', o2sat: '', sbp: '', dbp: '', pain: '', arrival_transport: '', chiefcomplaint: '' };
 
@@ -11,40 +11,36 @@ function ComparisonPanel({ title, onSubmit, result, isSubmitting, error, onClear
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-navy tracking-tight">{title}</h2>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-surface-lift border border-border text-primary font-bold">
+            {title === 'Scenario A' ? 'A' : 'B'}
+          </div>
+          <h3 className="font-bold text-primary">{title}</h3>
+        </div>
         {payload && (
-          <button
-            onClick={onClear}
-            className="text-xs font-medium text-text-secondary hover:text-navy px-2 py-1 rounded-lg hover:bg-slate-50 transition border border-border-subtle"
-          >
-            Clear
+          <button onClick={onClear} className="text-[10px] font-medium text-secondary hover:text-primary px-3 py-1.5 rounded-lg hover:bg-surface-lift transition border border-border">
+            Clear scenario
           </button>
         )}
       </div>
       {!result ? (
-        <AssessmentForm
-          onSubmit={onSubmit}
-          isSubmitting={isSubmitting}
-          result={null}
-        />
+        <AssessmentForm onSubmit={onSubmit} isSubmitting={isSubmitting} />
       ) : (
         <div className="space-y-4">
           {error && (
-            <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <div>
-                <div className="font-bold">Request failed</div>
-                <div className="text-xs mt-0.5 text-rose-700">{error}</div>
+            <div className="rounded-xl border border-error/20 bg-error-bg p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold text-error">Request failed</div>
+                  <div className="text-xs text-secondary mt-1">{error}</div>
+                </div>
               </div>
             </div>
           )}
           <PredictionResults result={result} />
-          <button
-            onClick={onClear}
-            className="inline-flex items-center gap-2 text-sm font-medium text-text-secondary hover:text-navy px-4 py-2 rounded-xl border border-border-subtle hover:bg-slate-50 transition"
-          >
-            <RefreshCcw className="w-4 h-4" />
-            Edit scenario
+          <button onClick={onClear} className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3 rounded-xl hover:bg-surface-lift transition border border-border">
+            <RefreshCcw className="w-4 h-4" /> Edit scenario
           </button>
         </div>
       )}
@@ -59,52 +55,41 @@ function DiffSummary({ resultA, resultB }) {
   const predB = resultB.prediction?.predicted_esi_level;
   const probsA = resultA.prediction?.probabilities || [];
   const probsB = resultB.prediction?.probabilities || [];
-
   const maxA = Math.max(...probsA.map(p => p.probability || 0), 0);
   const maxB = Math.max(...probsB.map(p => p.probability || 0), 0);
-
   const samePred = predA === predB;
   const diffMax = Math.abs(maxA - maxB);
 
   return (
-    <div className="bg-white rounded-2xl border border-border shadow-card p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <GitCompare className="w-5 h-5 text-teal" />
-        <h3 className="font-bold text-navy tracking-tight">Comparison Summary</h3>
-      </div>
-      <div className="grid sm:grid-cols-3 gap-3 text-sm">
-        <div className="p-3 rounded-xl bg-slate-50 border border-border-subtle">
-          <div className="text-xs font-mono text-text-muted uppercase tracking-wider">Prediction A</div>
-          <div className="text-2xl font-extrabold text-navy mt-1">ESI {predA ?? '—'}</div>
-          <div className="text-xs text-text-muted mt-0.5">Max prob {(maxA * 100).toFixed(0)}%</div>
+    <SectionCard title="Comparison summary" badge="Model behavior · not causation" icon={<GitCompare className="w-4 h-4" />}>
+      <div className="grid sm:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">Scenario A</div>
+          <div className="text-2xl font-extrabold text-primary">ESI {predA ?? '—'}</div>
+          <div className="text-[10px] font-mono text-muted mt-1">Max prob {(maxA * 100).toFixed(0)}%</div>
         </div>
-        <div className="p-3 rounded-xl bg-slate-50 border border-border-subtle">
-          <div className="text-xs font-mono text-text-muted uppercase tracking-wider">Prediction B</div>
-          <div className="text-2xl font-extrabold text-navy mt-1">ESI {predB ?? '—'}</div>
-          <div className="text-xs text-text-muted mt-0.5">Max prob {(maxB * 100).toFixed(0)}%</div>
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">Scenario B</div>
+          <div className="text-2xl font-extrabold text-primary">ESI {predB ?? '—'}</div>
+          <div className="text-[10px] font-mono text-muted mt-1">Max prob {(maxB * 100).toFixed(0)}%</div>
         </div>
-        <div className="p-3 rounded-xl bg-slate-50 border border-border-subtle flex flex-col justify-center">
-          <div className="text-xs font-mono text-text-muted uppercase tracking-wider">Agreement</div>
-          <div className="flex items-center gap-2 mt-1">
+        <div className="rounded-xl border border-border bg-surface p-4 flex flex-col justify-center">
+          <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">Agreement</div>
+          <div className="flex items-center gap-2 mb-2">
             {samePred ? (
-              <CheckCircle2 className="w-5 h-5 text-teal" />
+              <CheckCircle2 className="w-4 h-4 text-primary" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-amber-600" />
+              <AlertCircle className="w-4 h-4 text-warning" />
             )}
-            <span className="text-sm font-semibold text-navy">
-              {samePred ? 'Same predicted class' : 'Different predicted classes'}
-            </span>
+            <span className="font-medium text-primary">{samePred ? 'Same predicted class' : 'Different classes'}</span>
           </div>
-          <div className="text-xs text-text-muted mt-0.5">
-            Max prob diff {(diffMax * 100).toFixed(1)}%
-          </div>
+          <div className="text-[10px] font-mono text-muted">Max prob diff {diffMax * 100}%</div>
         </div>
       </div>
-      <div className="mt-3 text-xs text-text-muted leading-relaxed bg-slate-50 rounded-lg p-3 border border-border-subtle">
-        <strong>Important:</strong> These differences illustrate model behavior under varying inputs, not medical
-        causation. The model is a research prototype and not clinically validated. Both scenarios are synthetic.
+      <div className="rounded-lg border border-border/50 bg-surface-lift p-3 text-xs text-secondary leading-relaxed mt-2">
+        These differences illustrate model behavior under varying inputs — not medical causation. The model is a research prototype and not clinically validated. Both scenarios are synthetic.
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -118,111 +103,44 @@ export default function ScenarioComparisonPage() {
   const [errorA, setErrorA] = useState(null);
   const [errorB, setErrorB] = useState(null);
 
-  const submitScenario = async (payload, setLoading, setResult, setError) => {
-    setLoading(true);
-    setError(null);
+  const submitScenario = async (payload, setLoadingFn, setResultFn, setErrorFn) => {
+    setLoadingFn(true); setErrorFn(null);
     try {
       const r = await fetch('/api/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       const body = await r.json();
-      if (body.error) {
-        setError(body.error.detail || body.error);
-        setResult(null);
-        return;
-      }
-      setResult(body);
+      if (body.error) { setErrorFn(body.error.detail || body.error); setResultFn(null); return; }
+      setResultFn(body);
     } catch (e) {
-      setError('Connection failed — ensure the FastAPI backend is running on port 8000.');
-      setResult(null);
-    } finally {
-      setLoading(false);
-    }
+      setErrorFn('Connection failed — ensure the FastAPI backend is running on port 8000.');
+      setResultFn(null);
+    } finally { setLoadingFn(false); }
   };
 
-  const handleSubmitA = (payload) => {
-    setPayloadA(payload);
-    submitScenario(payload, setLoadingA, setResultA, setErrorA);
-  };
-
-  const handleSubmitB = (payload) => {
-    setPayloadB(payload);
-    submitScenario(payload, setLoadingB, setResultB, setErrorB);
-  };
-
-  const handleClearA = () => {
-    setPayloadA(null);
-    setResultA(null);
-    setErrorA(null);
-  };
-
-  const handleClearB = () => {
-    setPayloadB(null);
-    setResultB(null);
-    setErrorB(null);
-  };
-
-  const handleRerun = () => {
-    if (payloadA) submitScenario(payloadA, setLoadingA, setResultA, setErrorA);
-    if (payloadB) submitScenario(payloadB, setLoadingB, setResultB, setErrorB);
-  };
+  const handleSubmitA = (p) => { setPayloadA(p); submitScenario(p, setLoadingA, setResultA, setErrorA); };
+  const handleSubmitB = (p) => { setPayloadB(p); submitScenario(p, setLoadingB, setResultB, setErrorB); };
+  const handleClearA = () => { setPayloadA(null); setResultA(null); setErrorA(null); };
+  const handleClearB = () => { setPayloadB(null); setResultB(null); setErrorB(null); };
+  const handleRerun = () => { if (payloadA) submitScenario(payloadA, setLoadingA, setResultA, setErrorA); if (payloadB) submitScenario(payloadB, setLoadingB, setResultB, setErrorB); };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <DisclaimerBanner />
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tighter text-navy flex items-center gap-2">
-            <GitCompare className="w-7 h-7 text-teal" />
-            Scenario Comparison
-          </h1>
-          <p className="text-sm text-text-secondary mt-1 leading-relaxed max-w-2xl">
-            Compare two synthetic patient assessments side by side using the real MedGuard inference API. Both
-            scenarios remain local and are never stored. Differences illustrate model behavior, not medical causation.
-          </p>
-        </div>
-        {(resultA || resultB) && (
-          <button
-            onClick={handleRerun}
-            disabled={loadingA || loadingB}
-            className="inline-flex items-center gap-2 text-sm font-medium bg-teal hover:bg-teal/90 text-white px-4 py-2.5 rounded-xl shadow-lg shadow-teal/20 transition disabled:opacity-50"
-          >
-            <RefreshCcw className="w-4 h-4" />
-            Rerun comparison
-          </button>
-        )}
-      </div>
+    <div className="space-y-8">
+      <PageShell
+        title="Scenario comparison"
+        subtitle="Compare two synthetic patient assessments side by side using the real MedGuard inference API. Differences illustrate model behavior — not medical causation."
+        breadcrumb="Advanced Analysis · Scenario Comparison"
+      />
 
       <DiffSummary resultA={resultA} resultB={resultB} />
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <ComparisonPanel
-          title="Scenario A"
-          onSubmit={handleSubmitA}
-          result={resultA}
-          isSubmitting={loadingA}
-          error={errorA}
-          onClear={handleClearA}
-          payload={payloadA}
-        />
-        <ComparisonPanel
-          title="Scenario B"
-          onSubmit={handleSubmitB}
-          result={resultB}
-          isSubmitting={loadingB}
-          error={errorB}
-          onClear={handleClearB}
-          payload={payloadB}
-        />
+        <ComparisonPanel title="Scenario A" onSubmit={handleSubmitA} result={resultA} isSubmitting={loadingA} error={errorA} onClear={handleClearA} payload={payloadA} />
+        <ComparisonPanel title="Scenario B" onSubmit={handleSubmitB} result={resultB} isSubmitting={loadingB} error={errorB} onClear={handleClearB} payload={payloadB} />
       </div>
 
-      <div className="rounded-2xl bg-slate-50 border border-border-subtle p-4 text-xs text-text-muted leading-relaxed">
-        <strong>Methodology note:</strong> Each scenario is submitted independently to <code>POST /api/predict</code>.
-        Predictions, class probabilities, and SHAP attributions (when available) come directly from the saved model
-        pipeline. Explanation availability depends on the specific input and runtime conditions.
+      <div className="rounded-lg border border-border/50 bg-surface-lift p-4 text-[11px] font-mono text-muted leading-relaxed">
+        Each scenario is submitted independently to POST /api/predict. Predictions, class probabilities, and SHAP attributions (when available) come directly from the saved model pipeline.
       </div>
     </div>
   );

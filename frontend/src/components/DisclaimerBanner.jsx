@@ -8,7 +8,7 @@ export default function DisclaimerBanner() {
     <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-navy-deep via-navy-soft to-navy-deep text-white shadow-elevated">
       <div className="absolute top-0 right-0 w-64 h-64 bg-teal/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
       <div className="relative px-5 py-4 flex items-start gap-3">
-        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 border border-white/10">
+        <div className="w-8 h-8 rounded-lg bg-surface/10 flex items-center justify-center shrink-0 border border-white/10">
           <Sparkles className="w-4 h-4 text-teal-soft" />
         </div>
         <div className="min-w-0">

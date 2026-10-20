@@ -1,1 +1,0 @@
-Root cause: Missing imports (ModelRegistryPage, ExperimentPage, DriftPage) in App.jsx. Added imports. Frontend builds, dev server loads index.html with root element. All tests pass (139 backend, 21 frontend).

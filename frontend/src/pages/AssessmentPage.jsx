@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { ArrowRight, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
 import AssessmentForm from '../components/AssessmentForm';
-import SyntheticExamples from '../components/SyntheticExamples';
+import DisclaimerBanner from '../components/DisclaimerBanner';
+import { PageShell } from '../components/ui/states';
 
 export default function AssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
 
   const handleSubmit = async (payload) => {
-    setSubmitting(true); setDone(false); setError(null);
+    setSubmitting(true); setError(null);
     try {
       const r = await fetch('/api/predict', {
         method: 'POST',
@@ -19,30 +19,43 @@ export default function AssessmentPage() {
       const body = await r.json();
       if (!r.ok && !body.error) throw new Error('Unexpected response');
       if (body.error) { setError(body.error.detail || body.error); setSubmitting(false); return; }
-      window.location.href = '/prediction?from=assessment'; // pass result via state if needed
+      window.location.href = '/prediction';
     } catch (e) {
       setError('Connection failed — ensure the FastAPI backend is running on port 8000.');
-    } finally { setSubmitting(false); setDone(true); }
+    } finally { setSubmitting(false); }
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tighter text-navy">Patient Assessment</h1>
-        <p className="text-sm text-text-secondary mt-1">Synthetic triage assessment for the MedGuard research prototype. All inputs are fictional.</p>
-      </div>
+      <PageShell
+        title="New assessment"
+        subtitle="Enter synthetic triage vitals to see how the model reasons. All inputs are fictional — no real patient data is used."
+        breadcrumb="Workspace · Assessment"
+      />
 
       {error && (
-        <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <div>
-            <div className="font-bold">Request failed</div>
-            <div className="text-xs mt-0.5 text-rose-700">{error}</div>
+        <div className="rounded-xl border border-error/20 bg-error-bg p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-bold text-error">Request failed</div>
+              <div className="text-xs text-secondary mt-1">{error}</div>
+            </div>
           </div>
+          <button
+            onClick={() => setError(null)}
+            className="mt-3 inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline font-mono"
+          >
+            Dismiss <span className="text-[10px]">×</span>
+          </button>
         </div>
       )}
 
-      <AssessmentForm onSubmit={handleSubmit} isSubmitting={submitting} result={done ? {} : null} />
+      <section className="rounded-xl border border-border bg-surface shadow-sm">
+        <div className="p-6 border-b border-border">
+          <AssessmentForm onSubmit={handleSubmit} isSubmitting={submitting} result={null} />
+        </div>
+      </section>
     </div>
   );
 }

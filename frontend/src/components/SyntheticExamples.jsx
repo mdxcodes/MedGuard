@@ -10,16 +10,16 @@ const samples = [
 export default function SyntheticExamples({ onApply }) {
   const [picked, setPicked] = useState(null);
   return (
-    <div className="rounded-2xl bg-white border border-border shadow-card p-5">
-      <h3 className="font-semibold text-navy tracking-tight mb-3 flex items-center gap-2">
-        Synthetic Examples <span className="text-xs font-mono text-text-muted bg-slate-50 px-1.5 py-0.5 rounded">Fictional</span>
+    <div className="rounded-2xl bg-surface border border-border shadow-card p-5">
+      <h3 className="font-semibold text-primary tracking-tight mb-3 flex items-center gap-2">
+        Synthetic Examples <span className="text-xs font-mono text-text-muted bg-surface-soft px-1.5 py-0.5 rounded">Fictional</span>
       </h3>
       <div className="space-y-2">
         {samples.map((s) => (
           <button
             key={s.label}
             onClick={() => { setPicked(s); onApply(s.values); }}
-            className={`w-full text-left text-sm px-3 py-2.5 rounded-lg border transition font-medium ${picked?.label === s.label ? 'border-teal bg-teal-muted/30 text-teal' : 'border-border-subtle hover:border-teal/30 hover:bg-teal-muted/20 text-navy'}`}
+            className={`w-full text-left text-sm px-3 py-2.5 rounded-lg border transition font-medium ${picked?.label === s.label ? 'border-teal bg-teal-900/30 text-teal' : 'border-border-subtle hover:border-teal/30 hover:bg-teal-900/20 text-primary'}`}
           >
             <div className="flex items-center justify-between">
               <span>{s.label}</span>
@@ -29,7 +29,7 @@ export default function SyntheticExamples({ onApply }) {
           </button>
         ))}
       </div>
-      <div className="mt-3 text-[11px] text-text-muted leading-relaxed font-mono bg-slate-50 rounded-md px-2.5 py-1.5 border border-border-subtle">
+      <div className="mt-3 text-[11px] text-text-muted leading-relaxed font-mono bg-surface-soft rounded-md px-2.5 py-1.5 border border-border-subtle">
         Examples use synthetic vital-sign values drawn from the audited MIMIC-IV-ED demo ranges. They are not real patient records.
       </div>
     </div>
