@@ -2,55 +2,96 @@
 
 **Repository:** /secondary/MedGuard  
 **Branch:** main  
-**Commit:** 371dad3  
-**Date:** 2026-10-19
+**Commit:** `dfec5ae` — *Complete the Triagegeist migration: port tests, fix pipeline defects, align reports*  
+**Date:** 2026-10-21  
 
-## Commands Executed & Actual Results
+**Dataset:** Triagegeist (synthetic) — the primary and only dataset on the active execution path.
+
+---
+
+## 1. Commands Executed & Actual Results
 
 | Command | Result |
 |---------|--------|
-| `git status --short` | Working tree clean except new source + artifact files; no dataset committed |
-| `git log --oneline -5` | HEAD = 371dad3 |
-| `venv/bin/python -m pytest tests/ -v` | **139 passed, 2 warnings** |
-| `cd frontend && npx vitest run` | **22 passed, 7 test files** |
-| `cd frontend && vite build` | **Success** (index-CDbkgUaZ.js + CSS) |
+| `git status --short` | **Clean** — working tree has no uncommitted changes |
+| `venv/bin/python -m pytest tests/ -q` | **119 passed, 0 failed, 0 errors** |
+| `cd frontend && npx vitest run` | **35 passed, 0 failed** (8 test files) |
+| `cd frontend && npx vite build` | **Success** — `index-BbMypOb8.js`, `index-C4ZGAvF3.css` |
+| `venv/bin/python -m backend.ml.triagegeist_training` | **Success** — artifact + manifest written |
+| `venv/bin/python -m backend.ml.build_reports` | **Success** — 11 aggregate artifacts written |
+| `venv/bin/python -m backend.ml.run_data_prep` | **Success** — 0 failed checks, 3 warnings |
 | `curl /health` | `{"status":"ok"}` (200) |
-| `curl /model-info` | Returns Random Forest manifest (200) |
-| `curl /predict` (valid synthetic input) | Returns ESI prediction + probabilities + SHAP (200) |
-| `curl /predict` (invalid heartrate=9999) | Pydantic validation error, no stack trace leak (422) |
-| `curl /triagegeist/status` | Returns dataset profile + benchmark results (200) |
-| All 12 routes (`/`, `/assessment`, `/prediction`, `/performance`, `/methodology`, `/dataset`, `/compare`, `/errors`, `/explain`, `/registry`, `/experiments`, `/triagegeist`, `/drift`) | **All return HTTP 200** via dev server |
-| Backend startup smoke test | Starts successfully, loads model with 35 features |
+| `curl /model-info` | Random Forest, Triagegeist, 80,000 rows/patients, all 5 ESI levels (200) |
+| `curl /metrics` | (200) |
+| `curl /triagegeist/status` | (200) |
+| `curl /predict` (valid synthetic input) | ESI prediction, probabilities summing to 1.0, 10 SHAP features, disclaimer (200) |
+| `curl /predict` (invalid `heart_rate=9999`) | Structured validation error, no stack-trace leak (422) |
+| `curl /predict` (empty body `{}`) | 200 — all fields optional, missing vitals imputed with a missingness indicator |
+| Report leak scan | **No patient identifiers, no free complaint text, no MIMIC labels** in any of the 11 report artifacts |
 
-## Smoke Test Details
+---
 
-- `/health` → `{"status":"ok"}`
-- `/model-info` → model_name=random_forest, supported_esi_levels=[1,2,3,4,5], training_rows=163, training_patients=44
-- `/predict` (synthetic case: temp 98.6, HR 88, RR 16, O2 98, SBP 120, DBP 80, pain 3, transport AMBULANCE, complaint CHEST PAIN) → predicted_esi_level=2, probabilities for all 5 ESI levels (ESI 5 = 0.0), explanation_status=available
-- Invalid input (heartrate=9999) → structured validation error, no exception leakage
+## 2. Smoke Test Details
 
-## Browser Verification
+- `/model-info` → `model_name=random_forest`, `dataset=Triagegeist`, `target=triage_acuity`, `supported_esi_levels=[1,2,3,4,5]`, `training_rows=80000`, `training_patients=80000`, `created_utc=2026-10-21T10:17:50Z`.
+- `/model-info` limitations are **derived from the manifest's class distribution**, not hand-written: "All 5 ESI levels are present in the training cohort. ESI 1 is the rarest level (3222 of 80000 rows, 4.0%) and ESI 3 the most common, so predictions for the rare level are the least certain."
+- `/predict` (synthetic: temp 37.0, HR 88, RR 16, SpO2 98, SBP 120, DBP 80, pain 3, arrival AMBULANCE, complaint Cardiovascular, age 45, F) → `predicted_esi_level=4`, probabilities `[0.0, 0.0, 0.20, 0.57, 0.23]` (sum 1.0), `explanation_status=available` with 10 top features, disclaimer present.
+- `/predict` (severe synthetic: temp 38.9, HR 120, RR 24, SpO2 91, SBP 88, DBP 55, pain 8, age 72, M) → `predicted_esi_level=3`, probabilities `[0.01, 0.42, 0.57, 0.0, 0.0]`.
 
-Real browser automation/tooling was **not available** in this environment. Rendering was verified indirectly:
-- All routes return HTTP 200 (SPA shell serves index.html).
-- Production `vite build` succeeds, confirming all imports resolve and JSX is valid.
-- All page modules are present in the built JS bundle (verified via string search).
-- Cannot confirm pixel-perfect visual rendering or browser console errors without a browser.
+---
 
-## Privacy & Hygiene
+## 3. Model & Metrics Verified
 
-- No raw patient records, raw complaint text, patient identifiers, or secrets committed.
-- `triagegeist/test.csv` left untracked (not staged/committed).
-- Pre-existing tracked dataset files (train.csv etc.) were not added by this session.
-- `.gitignore` excludes mimic-iv-ed-demo, *.zip, datasets/, private/, exports/.
-- Public artifacts contain aggregate statistics only.
+| Item | Value |
+|---|---|
+| Artifact | `models/triagegeist/triage_model.joblib` (git-ignored) |
+| Manifest | `models/triagegeist/triage_model.manifest.json` |
+| Estimator | `RandomForestClassifier(n_estimators=100, max_depth=None, class_weight="balanced_subsample", random_state=20260915)` |
+| Transformed features | 66, from 31 source columns |
+| Training rows / patients | 80,000 / 80,000 |
+| CV macro-F1 (5-fold, patient-grouped) | **0.8421 ± 0.0019** |
+| Holdout macro-F1 (16,000 rows) | **0.8418** |
+| Holdout balanced accuracy / QWK | 0.8338 / 0.9120 |
+| Baselines on the same holdout | dummy 0.1068, logistic regression 0.8076 macro-F1 |
 
-## Outstanding / Not Applicable
+The published report artifacts are generated by `backend/ml/build_reports.py`, which now builds **the same feature frame and the same estimator configuration as the training path**. The metrics therefore describe the deployed artifact rather than a differently-configured model — this was a real inconsistency found and fixed during the migration.
 
-- Browser visual verification: not available (limitation stated).
-- Deployment to a hosted environment: not performed; deployment readiness not claimed.
-- Chief-complaint NLP for Triagegeist: deferred (structured baseline only).
+---
 
-## Conclusion
+## 4. Data-Quality Audit
 
-The application renders, all tests pass, the build succeeds, and the prediction flow works end to end. The repository is suitable for local demonstration and academic submission. Deployment testing requires a separate environment.
+`backend/ml/run_data_prep` reports **0 failed checks and 3 warnings** on the 80,000-row joined cohort:
+
+| Check | Result |
+|---|---|
+| `checksum_verification` | PASS — not applicable: the synthetic release ships no SHA256SUMS.txt manifest. Integrity is enforced by schema validation and the one-to-one join assertion instead. |
+| `age_availability` | PASS — age is supplied on every row; 0 missing. It is never fabricated or imputed from a missing field. |
+| `temperature_unit_handling` | WARN — 79,426 values identified as already Celsius, 0 converted from Fahrenheit, 0 implausible. |
+| `pain_score_parsing` | WARN — 11,156 values (13.9%) are the numeric `-1` "not assessed" sentinel; all become missing with a retained missingness indicator. |
+| `vital_sign_missingness` | WARN — respiratory rate 3.83%, temperature 0.72%, systolic/diastolic BP 5.48%/5.42%, pain 13.94%; all imputed from training medians with explicit indicators. |
+
+---
+
+## 5. Repository Hygiene
+
+| Check | Result |
+|---|---|
+| Dataset files staged | **None.** `triagegeist/` is git-ignored; no CSV is tracked. |
+| Model artifacts staged | **None.** `models/` and `*.joblib` are git-ignored. |
+| Report artifacts staged | The 11 JSON artifacts the frontend imports statically are tracked (required by the static-import build). |
+| Stale MIMIC-era report files | **Removed** (`confusion_matrix.csv`, `fold_metrics.csv`, `model_card.md`, `model_comparison.csv`). |
+| MIMIC references in active code | **None.** Remaining references are in the superseded historical documents, each of which now carries a banner. |
+| Frontend bundle | 14.4 MB — dominated by the complete 64,000-record out-of-fold error set. Deliberate: the error-analysis page derives its exact counts from those records, and truncating them would make the tiles report sample statistics as cohort statistics. See `TRIAGEGEIST_MIGRATION_REPORT.md` §15.
+
+---
+
+## 6. Outstanding Limitations
+
+These are properties of the data or the scope, not defects:
+
+1. **Synthetic data only.** Every metric is measured on synthetic records. None of it is evidence of performance on real emergency-department patients.
+2. **Not clinically validated.** The prototype must not be used for triage decisions.
+3. **`test.csv` ground truth is withheld**, so no metric can be reported for the competition test set.
+4. **The comorbidity history is not served.** The 25 `hx_*` flags are joined by the data-preparation pipeline but the deployed model does not use them: the assessment API cannot supply them for a new presentation, and defaulting them to "no comorbidity" would fabricate clinical history.
+5. **Licensing unverified.** The local Triagegeist files carry no embedded license text; confirm redistribution terms before sharing data or derived artifacts.
+6. **No real browser automation.** Routes are verified via HTTP 200, the production build and the component test suite; pixel-level rendering was not confirmed in a real browser.
