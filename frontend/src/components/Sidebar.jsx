@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiFetchOptional } from '../lib/api';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Menu, X, Shield, Activity, BrainCircuit, BarChart3, BookOpen, Database,
@@ -105,9 +106,12 @@ export default function Sidebar({ open, onClose }) {
 function StatusBadge() {
   const [status, setStatus] = useState('checking');
   useEffect(() => {
-    fetch('/api/health')
-      .then(r => r.ok ? setStatus('available') : setStatus('unavailable'))
-      .catch(() => setStatus('unavailable'));
+    let cancelled = false;
+    (async () => {
+      const res = await apiFetchOptional('/health');
+      if (!cancelled) setStatus(res ? 'available' : 'unavailable');
+    })();
+    return () => { cancelled = true; };
   }, []);
   const label = status === 'available' ? 'API available' : status === 'unavailable' ? 'API unavailable' : 'Checking…';
   const dot = status === 'available' ? 'bg-teal' : status === 'unavailable' ? 'bg-rose-500' : 'bg-amber-500';

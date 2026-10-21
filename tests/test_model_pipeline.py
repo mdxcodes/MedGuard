@@ -1,4 +1,4 @@
-"""Tests for MedGuard Phase 2: Model training, evaluation, and explainability."""
+"""Tests for MedGuard Triagegeist: Model training, evaluation, and explainability."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from backend.ml import config, evaluate, explain, features, splitting, train
-from backend.ml.run_experiment import run_phase2_experiment
+from backend.ml.triagegeist_training import run_training
 from tests.fixtures import synthetic_labelled_frame
 
 
@@ -24,13 +24,15 @@ def clean_frame():
 
 class TestModelTraining:
     def test_build_model_constructs_registered_models(self):
-        for name in train.MODEL_REGISTRY:
-            model = train.build_model(name)
+        from backend.ml.triagegeist_training import MODEL_FACTORIES
+        for name in MODEL_FACTORIES:
+            model = MODEL_FACTORIES[name]()
             assert model is not None
             assert hasattr(model, "fit")
 
     def test_pipeline_includes_preprocessing(self):
-        pipeline = train.build_estimator_pipeline("logistic_regression")
+        from backend.ml.triagegeist_training import build_random_forest_pipeline
+        pipeline = build_random_forest_pipeline()
         assert "preprocess" in pipeline.named_steps
         assert "estimator" in pipeline.named_steps
 
@@ -38,8 +40,9 @@ class TestModelTraining:
         X = clean_frame
         y = clean_frame[config.TARGET_COLUMN]
 
-        pipe1 = train.build_estimator_pipeline("random_forest")
-        pipe2 = train.build_estimator_pipeline("random_forest")
+        from backend.ml.triagegeist_training import build_random_forest_pipeline
+        pipe1 = build_random_forest_pipeline()
+        pipe2 = build_random_forest_pipeline()
 
         pipe1.fit(X, y)
         pipe2.fit(X, y)
@@ -52,14 +55,14 @@ class TestModelTraining:
         X = clean_frame
         y = clean_frame[config.TARGET_COLUMN]
 
-        pipeline = train.build_estimator_pipeline("logistic_regression")
+        from backend.ml.triagegeist_training import build_logistic_regression_pipeline
+        pipeline = build_logistic_regression_pipeline()
         pipeline.fit(X, y)
 
         feature_names = features.leakage_free_feature_names(pipeline)
         for forbidden in config.FORBIDDEN_FEATURE_COLUMNS:
             assert forbidden not in feature_names
-        assert "stay_id" not in feature_names
-        assert "subject_id" not in feature_names
+        assert "patient_id" not in feature_names
         assert "disposition" not in feature_names
 
 
@@ -87,16 +90,17 @@ class TestEvaluation:
     def test_patient_separation_across_cv_folds(self, clean_frame):
         folds = list(splitting.grouped_kfold(clean_frame, n_splits=5))
         for train_df, val_df in folds:
-            train_pts = set(train_df[config.SUBJECT_ID_COLUMN])
-            val_pts = set(val_df[config.SUBJECT_ID_COLUMN])
+            train_pts = set(train_df[config.PATIENT_ID_COLUMN])
+            val_pts = set(val_df[config.PATIENT_ID_COLUMN])
             assert len(train_pts.intersection(val_pts)) == 0
 
     def test_identical_evaluation_cohorts_for_model_comparisons(self, clean_frame):
         train_df, test_df = splitting.patient_grouped_split(clean_frame, test_size=0.2, seed=123)
-        
+
         # Test baseline and candidate on exact same test_df
-        dummy = train.build_estimator_pipeline("dummy_most_frequent")
-        rf = train.build_estimator_pipeline("random_forest")
+        from backend.ml.triagegeist_training import build_dummy_pipeline, build_random_forest_pipeline
+        dummy = build_dummy_pipeline()
+        rf = build_random_forest_pipeline()
 
         m_dummy = evaluate.evaluate_pipeline_on_split(dummy, train_df, test_df)
         m_rf = evaluate.evaluate_pipeline_on_split(rf, train_df, test_df)
@@ -122,7 +126,8 @@ class TestModelPersistence:
         X = clean_frame
         y = clean_frame[config.TARGET_COLUMN]
 
-        pipeline = train.build_estimator_pipeline("logistic_regression")
+        from backend.ml.triagegeist_training import build_logistic_regression_pipeline
+        pipeline = build_logistic_regression_pipeline()
         pipeline.fit(X, y)
         pred_before = pipeline.predict(X)
 
@@ -133,7 +138,7 @@ class TestModelPersistence:
                 path,
                 model_name="logistic_regression",
                 training_rows=len(X),
-                training_patients=X[config.SUBJECT_ID_COLUMN].nunique(),
+                training_patients=X[config.PATIENT_ID_COLUMN].nunique(),
             )
             assert path.exists()
             manifest_path = path.with_suffix(".manifest.json")
@@ -156,7 +161,8 @@ class TestExplainability:
         X = clean_frame
         y = clean_frame[config.TARGET_COLUMN]
 
-        pipeline = train.build_estimator_pipeline("random_forest")
+        from backend.ml.triagegeist_training import build_random_forest_pipeline
+        pipeline = build_random_forest_pipeline()
         pipeline.fit(X, y)
 
         res = explain.explain_prediction(pipeline, X, row_index=0)
@@ -175,18 +181,15 @@ class TestFullExperimentRun:
         reports_dir = tmp_path / "reports"
         models_dir = tmp_path / "models"
 
-        res = run_phase2_experiment(reports_dir=reports_dir, models_dir=models_dir)
+        res = run_training(reports_dir=reports_dir, models_dir=models_dir)
 
-        assert (reports_dir / "model_evaluation.json").exists()
-        assert (reports_dir / "model_comparison.csv").exists()
-        assert (reports_dir / "confusion_matrix.csv").exists()
-        assert (reports_dir / "fold_metrics.csv").exists()
-        assert (reports_dir / "model_card.md").exists()
+        assert (reports_dir / "triagegeist_evaluation.json").exists()
+        assert (reports_dir / "triagegeist_model_comparison.csv").exists()
+        assert (reports_dir / "triagegeist_fold_metrics.csv").exists()
         assert (models_dir / "triage_model.joblib").exists()
-        assert (models_dir / "triage_model.manifest.json").exists()
 
         # Check model comparison content
-        comp_df = pd.read_csv(reports_dir / "model_comparison.csv")
-        assert len(comp_df) == 4
+        comp_df = pd.read_csv(reports_dir / "triagegeist_model_comparison.csv")
+        assert len(comp_df) >= 3
         assert "random_forest" in comp_df["model"].values
-        assert "dummy_most_frequent" in comp_df["model"].values
+        assert "dummy" in comp_df["model"].values

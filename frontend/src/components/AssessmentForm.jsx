@@ -2,7 +2,24 @@ import { useState } from 'react';
 import { ArrowRight, RotateCcw, AlertCircle } from 'lucide-react';
 import SyntheticExamples from './SyntheticExamples';
 
-const INITIAL = { temperature: '', heartrate: '', resprate: '', o2sat: '', sbp: '', dbp: '', pain: '', arrival_transport: '', chiefcomplaint: '' };
+const INITIAL = {
+  heart_rate: '',
+  respiratory_rate: '',
+  temperature_c: '',
+  spo2: '',
+  systolic_bp: '',
+  diastolic_bp: '',
+  pain_score: '',
+  arrival_mode: '',
+  chief_complaint_system: '',
+  age: '',
+  sex: '',
+  insurance_type: '',
+  arrival_hour: '',
+  shock_index: '',
+  num_prior_ed_visits_12m: '',
+  num_active_medications: '',
+};
 
 export default function AssessmentForm({ onSubmit, isSubmitting }) {
   const [values, setValues] = useState(INITIAL);
@@ -20,14 +37,14 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
   const validate = () => {
     const e = {};
     const n = (x) => (x === '' || x === null || x === undefined || isNaN(Number(x)) ? null : Number(x));
-    const temp = n(values.temperature);
-    if (temp !== null && (temp < 30 || temp > 110)) e.temperature = 'Outside plausible clinical envelope';
-    const hr = n(values.heartrate); if (hr !== null && (hr < 30 || hr > 220)) e.heartrate = 'Outside 30–220 bpm';
-    const rr = n(values.resprate); if (rr !== null && (rr < 4 || rr > 60)) e.resprate = 'Outside 4–60 /min';
-    const o2 = n(values.o2sat); if (o2 !== null && (o2 < 50 || o2 > 100)) e.o2sat = 'Outside 50–100 %';
-    const sbp = n(values.sbp); if (sbp !== null && (sbp < 50 || sbp > 250)) e.sbp = 'Outside 50–250 mmHg';
-    const dbp = n(values.dbp); if (dbp !== null && (dbp < 30 || dbp > 150)) e.dbp = 'Outside 30–150 mmHg';
-    const pain = n(values.pain); if (pain !== null && (pain < 0 || pain > 10)) e.pain = 'Outside 0–10';
+    const hr = n(values.heart_rate); if (hr !== null && (hr < 20 || hr > 220)) e.heart_rate = 'Outside 20–220 bpm';
+    const rr = n(values.respiratory_rate); if (rr !== null && (rr < 4 || rr > 60)) e.respiratory_rate = 'Outside 4–60 /min';
+    const temp = n(values.temperature_c); if (temp !== null && (temp < 30 || temp > 42)) e.temperature_c = 'Outside 30–42 °C';
+    const o2 = n(values.spo2); if (o2 !== null && (o2 < 50 || o2 > 100)) e.spo2 = 'Outside 50–100 %';
+    const sbp = n(values.systolic_bp); if (sbp !== null && (sbp < 50 || sbp > 250)) e.systolic_bp = 'Outside 50–250 mmHg';
+    const dbp = n(values.diastolic_bp); if (dbp !== null && (dbp < 30 || dbp > 150)) e.diastolic_bp = 'Outside 30–150 mmHg';
+    const pain = n(values.pain_score); if (pain !== null && (pain < 0 || pain > 10)) e.pain_score = 'Outside 0–10';
+    const age = n(values.age); if (age !== null && (age < 0 || age > 120)) e.age = 'Outside 0–120 years';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -36,15 +53,22 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
     ev.preventDefault();
     if (validate()) {
       const payload = {
-        temperature: values.temperature === '' ? undefined : Number(values.temperature),
-        heartrate: values.heartrate === '' ? undefined : Number(values.heartrate),
-        resprate: values.resprate === '' ? undefined : Number(values.resprate),
-        o2sat: values.o2sat === '' ? undefined : Number(values.o2sat),
-        sbp: values.sbp === '' ? undefined : Number(values.sbp),
-        dbp: values.dbp === '' ? undefined : Number(values.dbp),
-        pain: values.pain === '' ? undefined : Number(values.pain),
-        arrival_transport: values.arrival_transport || undefined,
-        chiefcomplaint: values.chiefcomplaint || undefined,
+        heart_rate: values.heart_rate === '' ? undefined : Number(values.heart_rate),
+        respiratory_rate: values.respiratory_rate === '' ? undefined : Number(values.respiratory_rate),
+        temperature_c: values.temperature_c === '' ? undefined : Number(values.temperature_c),
+        spo2: values.spo2 === '' ? undefined : Number(values.spo2),
+        systolic_bp: values.systolic_bp === '' ? undefined : Number(values.systolic_bp),
+        diastolic_bp: values.diastolic_bp === '' ? undefined : Number(values.diastolic_bp),
+        pain_score: values.pain_score === '' ? undefined : Number(values.pain_score),
+        arrival_mode: values.arrival_mode || undefined,
+        chief_complaint_system: values.chief_complaint_system || undefined,
+        age: values.age === '' ? undefined : Number(values.age),
+        sex: values.sex || undefined,
+        insurance_type: values.insurance_type || undefined,
+        arrival_hour: values.arrival_hour === '' ? undefined : Number(values.arrival_hour),
+        shock_index: values.shock_index === '' ? undefined : Number(values.shock_index),
+        num_prior_ed_visits_12m: values.num_prior_ed_visits_12m === '' ? undefined : Number(values.num_prior_ed_visits_12m),
+        num_active_medications: values.num_active_medications === '' ? undefined : Number(values.num_active_medications),
       };
       onSubmit(payload);
     }
@@ -56,40 +80,57 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
     <form onSubmit={handleSubmit} className="space-y-8" aria-label="Triage assessment form" noValidate>
       {/* Vital signs */}
       <section aria-labelledby="vs-heading" className="space-y-6">
-        <h2 id="vs-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Vital signs</h2>
+        <h2 id="vs-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Vital Signs</h2>
         <div className="grid sm:grid-cols-3 gap-3">
-          <Field label="Temperature" unit="°C / °F" name="temperature" value={values.temperature} onChange={v => update('temperature', v)} error={errors.temperature} placeholder="98.6" className={inputClass('temperature')} />
-          <Field label="Heart rate" unit="bpm" name="heartrate" value={values.heartrate} onChange={v => update('heartrate', v)} error={errors.heartrate} placeholder="88" className={inputClass('heartrate')} />
-          <Field label="Resp. rate" unit="/min" name="resprate" value={values.resprate} onChange={v => update('resprate', v)} error={errors.resprate} placeholder="16" className={inputClass('resprate')} />
-          <Field label="O₂ saturation" unit="%" name="o2sat" value={values.o2sat} onChange={v => update('o2sat', v)} error={errors.o2sat} placeholder="98" className={inputClass('o2sat')} />
-          <Field label="Systolic BP" unit="mmHg" name="sbp" value={values.sbp} onChange={v => update('sbp', v)} error={errors.sbp} placeholder="120" className={inputClass('sbp')} />
-          <Field label="Diastolic BP" unit="mmHg" name="dbp" value={values.dbp} onChange={v => update('dbp', v)} error={errors.dbp} placeholder="80" className={inputClass('dbp')} />
+          <Field label="Heart Rate" unit="bpm" name="heart_rate" value={values.heart_rate} onChange={v => update('heart_rate', v)} error={errors.heart_rate} placeholder="88" className={inputClass('heart_rate')} />
+          <Field label="Resp. Rate" unit="/min" name="respiratory_rate" value={values.respiratory_rate} onChange={v => update('respiratory_rate', v)} error={errors.respiratory_rate} placeholder="16" className={inputClass('respiratory_rate')} />
+          <Field label="Temperature" unit="°C" name="temperature_c" value={values.temperature_c} onChange={v => update('temperature_c', v)} error={errors.temperature_c} placeholder="37.0" className={inputClass('temperature_c')} />
+          <Field label="O₂ Saturation" unit="%" name="spo2" value={values.spo2} onChange={v => update('spo2', v)} error={errors.spo2} placeholder="98" className={inputClass('spo2')} />
+          <Field label="Systolic BP" unit="mmHg" name="systolic_bp" value={values.systolic_bp} onChange={v => update('systolic_bp', v)} error={errors.systolic_bp} placeholder="120" className={inputClass('systolic_bp')} />
+          <Field label="Diastolic BP" unit="mmHg" name="diastolic_bp" value={values.diastolic_bp} onChange={v => update('diastolic_bp', v)} error={errors.diastolic_bp} placeholder="80" className={inputClass('diastolic_bp')} />
         </div>
       </section>
 
-      {/* Pain & context */}
+      {/* Pain & Demographics */}
       <section aria-labelledby="ctx-heading" className="space-y-6">
-        <h2 id="ctx-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Pain & context</h2>
+        <h2 id="ctx-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Pain & Demographics</h2>
         <div className="grid sm:grid-cols-2 gap-3 lg:gap-6">
           <div>
             <Field
-              label="Pain score" unit="0–10" name="pain" value={values.pain}
-              onChange={v => update('pain', v)} error={errors.pain} placeholder="3" className={inputClass('pain')}
-              hint="Numeric 0–10 scale. Sentinels (UA, unable) become missing."
+              label="Pain Score" unit="0–10" name="pain_score" value={values.pain_score}
+              onChange={v => update('pain_score', v)} error={errors.pain_score} placeholder="3" className={inputClass('pain_score')}
+              hint="Numeric 0–10 scale."
             />
           </div>
           <div>
-            <FieldSelect
-              label="Arrival transport" name="arrival_transport" value={values.arrival_transport}
-              onChange={e => update('arrival_transport', e.target.value)} error={errors.arrival_transport}
+            <Field
+              label="Age" unit="years" name="age" value={values.age}
+              onChange={v => update('age', v)} error={errors.age} placeholder="45" className={inputClass('age')}
+              hint="Patient age in years."
             />
           </div>
           <div className="lg:col-span-2">
-            <FieldText
-              label="Chief complaint" name="chiefcomplaint" value={values.chiefcomplaint}
-              onChange={e => update('chiefcomplaint', e.target.value)} error={errors.chiefcomplaint}
-              placeholder="e.g. CHEST PAIN, HEAD INJURY, ABDOMINAL PAIN"
-              hint="Normalised upstream (uppercase, whitespace collapsed). Placeholders mapped to 'unknown'."
+            <FieldSelect
+              label="Arrival Mode" name="arrival_mode" value={values.arrival_mode}
+              onChange={e => update('arrival_mode', e.target.value)} error={errors.arrival_mode}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <FieldSelect
+              label="Sex" name="sex" value={values.sex}
+              onChange={e => update('sex', e.target.value)} error={errors.sex}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <FieldSelect
+              label="Insurance Type" name="insurance_type" value={values.insurance_type}
+              onChange={e => update('insurance_type', e.target.value)} error={errors.insurance_type}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <FieldSelect
+              label="Chief Complaint" name="chief_complaint_system" value={values.chief_complaint_system}
+              onChange={e => update('chief_complaint_system', e.target.value)} error={errors.chief_complaint_system}
             />
           </div>
         </div>
@@ -98,7 +139,7 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
       {/* Submit */}
       <div className="flex items-center gap-3 pt-4 border-t border-border">
         <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-6 py-3.5 rounded-xl shadow-lg shadow-primary/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
-          {isSubmitting ? 'Submitting…' : 'Submit assessment'}
+          {isSubmitting ? 'Submitting…' : 'Submit Assessment'}
           {!isSubmitting && <ArrowRight className="w-4 h-4" />}
         </button>
         <button type="button" onClick={() => { setValues(INITIAL); setErrors({}); setTouched({}); }} className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3.5 rounded-xl hover:bg-surface-lift transition border border-border">
@@ -125,7 +166,7 @@ function Field({ label, unit, name, value, onChange, error, placeholder, classNa
       <input
         id={name}
         type="number"
-        step={name === 'pain' ? 1 : 0.1}
+        step={name === 'pain_score' ? 1 : 0.1}
         value={value}
         onChange={e => onChange(e.target.value)}
         className={className}
@@ -162,6 +203,13 @@ function FieldText({ label, name, value, onChange, error, placeholder, hint }) {
 }
 
 function FieldSelect({ label, name, value, onChange, error }) {
+  const optionsMap = {
+    arrival_mode: ['AMBULANCE', 'WALK IN', 'OTHER', 'UNKNOWN'],
+    sex: ['M', 'F', 'Other', 'Unknown'],
+    insurance_type: ['Private', 'Medicare', 'Medicaid', 'Self-pay', 'Other', 'Unknown'],
+    chief_complaint_system: ['Cardiovascular', 'Respiratory', 'Neurological', 'Abdominal', 'Trauma', 'Other', 'Unknown'],
+  };
+  const options = optionsMap[name] || [];
   return (
     <div>
       <div className="flex items-baseline gap-1 mb-1.5">
@@ -169,10 +217,9 @@ function FieldSelect({ label, name, value, onChange, error }) {
       </div>
       <select id={name} value={value} onChange={e => onChange(e.target.value)} className={inputClassForSelect(error)}>
         <option value="">Select…</option>
-        <option value="AMBULANCE">AMBULANCE</option>
-        <option value="WALK IN">WALK IN</option>
-        <option value="UNKNOWN">UNKNOWN</option>
-        <option value="OTHER">OTHER</option>
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
       </select>
       {error && <div id={`${name}-err`} className="text-[10px] text-error mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {error}</div>}
     </div>

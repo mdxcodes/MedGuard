@@ -1,8 +1,8 @@
 """Tests for the MedGuard FastAPI layer.
 
-Tests must run without internet access and must never touch the real MIMIC
-dataset beyond what Phase 1's synthetic fixture infrastructure already
-provides. No Supabase, no production deployment, no external secrets.
+Tests must run without internet access and must never touch real patient data
+beyond what synthetic fixture infrastructure provides. No Supabase, no
+production deployment, no external secrets.
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ from backend.api.schemas import (
     PredictResponse,
 )
 from backend.ml import config as ml_config
-from backend.ml.data_loading import load_joined_dataset
-from backend.ml.features import build_feature_frame
+from backend.ml.triagegeist_loader import load_all
+from backend.ml.triagegeist_preprocessing import build_feature_frame
 from tests.fixtures import synthetic_labelled_frame
 
 
@@ -67,24 +67,28 @@ def client(app):
 def synthetic_assessment():
     """A valid synthetic triage assessment drawn from realistic ranges."""
     return AssessmentRequest(
-        subject_id="demo-001",
-        temperature=98.6,
-        heartrate=88.0,
-        resprate=16.0,
-        o2sat=98.0,
-        sbp=120.0,
-        dbp=80.0,
-        pain=3.0,
-        arrival_transport="AMBULANCE",
-        chiefcomplaint="CHEST PAIN",
+        patient_id="demo-001",
+        heart_rate=88.0,
+        respiratory_rate=16.0,
+        temperature_c=37.0,
+        spo2=98.0,
+        systolic_bp=120.0,
+        diastolic_bp=80.0,
+        pain_score=3.0,
+        arrival_mode="AMBULANCE",
+        chief_complaint_system="Cardiovascular",
+        age=45.0,
+        sex="M",
+        insurance_type="Private",
+        arrival_hour=14.0,
     )
 
 
 @pytest.fixture()
 def real_feature_frame():
-    """Feature frame built from the actual licensed dataset (audit step)."""
-    joined = load_joined_dataset()
-    return build_feature_frame(joined)
+    """Feature frame built from the actual Triagegeist dataset."""
+    data = load_all()
+    return build_feature_frame(data["train"])
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +117,7 @@ class TestModelInfo:
         assert payload["model_name"] == "random_forest"
         assert payload["supported_esi_levels"] == [1, 2, 3, 4, 5]
         assert len(payload["limitations"]) > 0
-        assert "demo subset" in payload["dataset"].lower()
+        assert "triagegeist" in payload["dataset"].lower()
 
     def test_model_info_fails_when_artifact_missing(self, tmp_path, monkeypatch, app):
         fake_path = tmp_path / "missing.joblib"
@@ -151,19 +155,23 @@ class TestPredictHappyPath:
     def test_prediction_is_consistent_with_direct_pipeline(self, client, real_feature_frame):
         """Assert the API prediction matches direct inference on the same row."""
         row = real_feature_frame.iloc[[0]]
-        subject_id = row["subject_id"].iloc[0]
+        patient_id = str(row["patient_id"].iloc[0])
         # Build an AssessmentRequest that mirrors the first training row exactly.
         req = AssessmentRequest(
-            subject_id=str(subject_id),
-            temperature=float(row["temperature"].iloc[0]) if not pd.isna(row["temperature"].iloc[0]) else None,
-            heartrate=float(row["heartrate"].iloc[0]) if not pd.isna(row["heartrate"].iloc[0]) else None,
-            resprate=float(row["resprate"].iloc[0]) if not pd.isna(row["resprate"].iloc[0]) else None,
-            o2sat=float(row["o2sat"].iloc[0]) if not pd.isna(row["o2sat"].iloc[0]) else None,
-            sbp=float(row["sbp"].iloc[0]) if not pd.isna(row["sbp"].iloc[0]) else None,
-            dbp=float(row["dbp"].iloc[0]) if not pd.isna(row["dbp"].iloc[0]) else None,
-            pain=float(row["pain"].iloc[0]) if not pd.isna(row["pain"].iloc[0]) else None,
-            arrival_transport=row["arrival_transport"].iloc[0],
-            chiefcomplaint=row["chiefcomplaint"].iloc[0],
+            patient_id=patient_id,
+            heart_rate=float(row["heart_rate"].iloc[0]) if not pd.isna(row["heart_rate"].iloc[0]) else None,
+            respiratory_rate=float(row["respiratory_rate"].iloc[0]) if not pd.isna(row["respiratory_rate"].iloc[0]) else None,
+            temperature_c=float(row["temperature_c"].iloc[0]) if not pd.isna(row["temperature_c"].iloc[0]) else None,
+            spo2=float(row["spo2"].iloc[0]) if not pd.isna(row["spo2"].iloc[0]) else None,
+            systolic_bp=float(row["systolic_bp"].iloc[0]) if not pd.isna(row["systolic_bp"].iloc[0]) else None,
+            diastolic_bp=float(row["diastolic_bp"].iloc[0]) if not pd.isna(row["diastolic_bp"].iloc[0]) else None,
+            pain_score=float(row["pain_score"].iloc[0]) if not pd.isna(row["pain_score"].iloc[0]) else None,
+            arrival_mode=str(row["arrival_mode"].iloc[0]) if not pd.isna(row["arrival_mode"].iloc[0]) else None,
+            chief_complaint_system=str(row["chief_complaint_system"].iloc[0]) if not pd.isna(row["chief_complaint_system"].iloc[0]) else None,
+            age=float(row["age"].iloc[0]) if not pd.isna(row["age"].iloc[0]) else None,
+            sex=str(row["sex"].iloc[0]) if not pd.isna(row["sex"].iloc[0]) else None,
+            insurance_type=str(row["insurance_type"].iloc[0]) if not pd.isna(row["insurance_type"].iloc[0]) else None,
+            arrival_hour=float(row["arrival_hour"].iloc[0]) if not pd.isna(row["arrival_hour"].iloc[0]) else None,
         )
         resp = client.post("/predict", json=req.model_dump())
         assert resp.status_code == 200
@@ -190,13 +198,13 @@ class TestPredictInvalidInputs:
 
     def test_out_of_range_temperature_rejected(self, client, synthetic_assessment):
         req = synthetic_assessment.model_copy()
-        req.temperature = 200.0
+        req.temperature_c = 200.0
         resp = client.post("/predict", json=req.model_dump())
         assert resp.status_code == 200
 
     def test_out_of_range_pain_rejected(self, client, synthetic_assessment):
         req = synthetic_assessment.model_copy()
-        req.pain = 15.0
+        req.pain_score = 15.0
         resp = client.post("/predict", json=req.model_dump())
         assert resp.status_code == 422
 
@@ -248,15 +256,15 @@ class TestSafety:
         resp = client.post("/predict", json=synthetic_assessment.model_dump())
         assert resp.status_code == 200
         text = resp.text
-        # Real MIMIC subject_ids contain 8-digit numbers; reject those leaking.
-        for pid in ("10014354", "10040025", "10018328"):
+        # Synthetic patient_ids contain 4-digit numbers; reject those leaking.
+        for pid in ("9001", "9002", "9003"):
             assert pid not in text, f"Patient identifier {pid} leaked into response"
 
     def test_no_stack_traces_exposed(self, client, synthetic_assessment):
         # Even when something goes wrong, stack traces must not leak.
         # Trigger a controlled failure by using an impossible input shape.
         req = synthetic_assessment.model_copy()
-        req.temperature = "NOT_A_NUMBER"
+        req.temperature_c = "NOT_A_NUMBER"
         resp = client.post("/predict", json=req.model_dump())
         assert "traceback" not in resp.text.lower()
         assert "exception" not in resp.text.lower()

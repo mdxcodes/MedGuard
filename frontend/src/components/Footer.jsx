@@ -21,7 +21,7 @@ export default function Footer() {
             <span>·</span>
             <span>ESI labels: 1–5</span>
             <span>·</span>
-            <span>MIMIC-IV-ED v2.2 demo</span>
+            <span>Triagegeist synthetic dataset</span>
           </div>
         </div>
         <div className="mt-6 md:mt-0 text-[9px] font-mono text-muted">

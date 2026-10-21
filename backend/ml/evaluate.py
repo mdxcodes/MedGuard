@@ -1,4 +1,4 @@
-"""MedGuard Phase 2 — evaluation metrics and cross-validation evaluation.
+"""MedGuard Triagegeist evaluation metrics and cross-validation evaluation.
 
 Metrics are always computed with explicit ESI labels ``[1, 2, 3, 4, 5]`` and
 ``zero_division=0``, so missing-class folds (ESI 4, 5) are marked clearly
@@ -20,10 +20,10 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 
-from backend.ml import config, features, splitting
+from backend.ml import config, triagegeist_schema
 
-EXPLICIT_LABELS: list[int] = list(config.ESI_LABELS)
-LABEL_NAMES: list[str] = [f"ESI {int(l)}" for l in EXPLICIT_LABELS]
+EXPLICIT_LABELS: list[int] = list(triagegeist_schema.ESI_LABELS)
+LABEL_NAMES: list[str] = triagegeist_schema.ESI_LABEL_NAMES
 
 
 def compute_metrics(
@@ -41,7 +41,7 @@ def compute_metrics(
         y_true_a, y_pred_a, labels=EXPLICIT_LABELS, zero_division=0
     )
 
-    # Confusion matrix rows = true, cols = predicted, fixed 5×5.
+    # Confusion matrix rows = true, cols = predicted, fixed 5x5.
     cm = confusion_matrix(y_true_a, y_pred_a, labels=EXPLICIT_LABELS)
 
     # Quadratic-weighted kappa is undefined for single-label or degenerate sets.
@@ -65,6 +65,11 @@ def compute_metrics(
             "true_support": int(true_support[name]),
         }
 
+    # Undertriage: predicting higher ESI number (lower urgency) than true
+    # Overtriage: predicting lower ESI number (higher urgency) than true
+    undertriage = int((y_pred_a > y_true_a).sum())
+    overtriage = int((y_pred_a < y_true_a).sum())
+
     return {
         "balanced_accuracy": float(ba),
         "macro_f1": float(macro_f1),
@@ -74,6 +79,8 @@ def compute_metrics(
         "confusion_matrix_labels": LABEL_NAMES,
         "y_true_counts": true_support,
         "y_pred_counts": {f"ESI {int(l)}": int((y_pred_a == l).sum()) for l in EXPLICIT_LABELS},
+        "undertriage_count": undertriage,
+        "overtriage_count": overtriage,
     }
 
 
@@ -82,7 +89,8 @@ def aggregate_fold_metrics(fold_metrics: list[dict[str, Any]]) -> dict[str, Any]
     if not fold_metrics:
         return {}
 
-    scalars = ["balanced_accuracy", "macro_f1", "quadratic_weighted_kappa"]
+    scalars = ["balanced_accuracy", "macro_f1", "quadratic_weighted_kappa",
+               "undertriage_count", "overtriage_count"]
     summary: dict[str, Any] = {}
     for key in scalars:
         values = [m[key] for m in fold_metrics if m.get(key) is not None]
@@ -115,20 +123,20 @@ def evaluate_pipeline_on_split(
     test_df: pd.DataFrame,
 ) -> dict[str, Any]:
     """Fit a full pipeline on train_df, evaluate on test_df, and return metrics.
-    
-    Leakage check: preprocessor is fit only on train_df.
+
+    Leakage check: preprocessor is fit only on training data.
     """
-    y_train = train_df[config.TARGET_COLUMN].values.astype(int)
-    y_test = test_df[config.TARGET_COLUMN].values.astype(int)
+    y_train = train_df[triagegeist_schema.TARGET_COLUMN].values.astype(int)
+    y_test = test_df[triagegeist_schema.TARGET_COLUMN].values.astype(int)
 
     pipeline.fit(train_df, y_train)
     y_pred = pipeline.predict(test_df)
 
     metrics = compute_metrics(y_test, y_pred)
-    metrics["train_rows"] = len(train_df)
-    metrics["test_rows"] = len(test_df)
-    metrics["train_patients"] = int(train_df[config.SUBJECT_ID_COLUMN].nunique())
-    metrics["test_patients"] = int(test_df[config.SUBJECT_ID_COLUMN].nunique())
+    metrics["train_rows"] = int(len(train_df))
+    metrics["test_rows"] = int(len(test_df))
+    metrics["train_patients"] = int(train_df[triagegeist_schema.PATIENT_ID_COLUMN].nunique())
+    metrics["test_patients"] = int(test_df[triagegeist_schema.PATIENT_ID_COLUMN].nunique())
     return metrics
 
 
@@ -142,7 +150,7 @@ def run_grouped_cv_evaluation(
     fold_diagnostics = []
 
     for fold_idx, (train_fold, val_fold) in enumerate(
-        splitting.grouped_kfold(feature_frame, n_splits=n_splits)
+        __import__('backend.ml.splitting', fromlist=['grouped_kfold']).grouped_kfold(feature_frame, n_splits=n_splits)
     ):
         pipeline = model_factory()
         metrics = evaluate_pipeline_on_split(pipeline, train_fold, val_fold)
@@ -168,26 +176,25 @@ def run_grouped_cv_evaluation(
     }
 
 
-
 def run_grouped_cv_oof(
     model_factory: Any,
     feature_frame: pd.DataFrame,
     n_splits: int = config.N_SPLITS,
 ) -> dict[str, Any]:
     """Run GroupKFold cross-validation and collect out-of-fold predictions.
-    
+
     Returns per-sample predictions for samples in feature_frame in original order,
     along with their true labels and fold indices. No patient identifiers are included.
     """
     from sklearn.model_selection import GroupKFold
 
-    groups = feature_frame[config.SUBJECT_ID_COLUMN].values
-    X = feature_frame.drop(columns=[config.TARGET_COLUMN, config.SUBJECT_ID_COLUMN])
-    y = feature_frame[config.TARGET_COLUMN].values.astype(int)
+    groups = feature_frame[triagegeist_schema.PATIENT_ID_COLUMN].values
+    X = feature_frame.drop(columns=[triagegeist_schema.TARGET_COLUMN, triagegeist_schema.PATIENT_ID_COLUMN])
+    y = feature_frame[triagegeist_schema.TARGET_COLUMN].values.astype(int)
 
     gkf = GroupKFold(n_splits=n_splits)
     oof_pred = np.full(len(X), fill_value=-1, dtype=int)
-    oof_proba = np.zeros((len(X), len(config.ESI_LABELS)))
+    oof_proba = np.zeros((len(X), len(triagegeist_schema.ESI_LABELS)))
     fold_indices = np.full(len(X), fill_value=-1, dtype=int)
 
     for fold_idx, (train_idx, val_idx) in enumerate(gkf.split(X, y, groups=groups)):
@@ -204,10 +211,11 @@ def run_grouped_cv_oof(
         "y_pred": oof_pred.tolist(),
         "y_pred_proba": oof_proba.tolist(),
         "fold": fold_indices.tolist(),
-        "classes": config.ESI_LABELS,
+        "classes": triagegeist_schema.ESI_LABELS,
         "n_samples": len(X),
     }
-DERIVED_FEATURES_PLACEHOLDER = ("shock_index", "pulse_pressure", "abnormal_vital_count")
+
+
 def build_drift_payload(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -222,15 +230,16 @@ def build_drift_payload(
     def _numeric_profile(df: pd.DataFrame) -> dict[str, float | None]:
         profile: dict[str, float | None] = {}
         numeric_features = (
-            "temperature",
-            "heartrate",
-            "resprate",
-            "o2sat",
-            "sbp",
-            "dbp",
+            "heart_rate",
+            "respiratory_rate",
+            "temperature_c",
+            "spo2",
+            "systolic_bp",
+            "diastolic_bp",
+            "pain_score",
             "shock_index",
             "pulse_pressure",
-            "abnormal_vital_count",
+            "mean_arterial_pressure",
         )
         for col in numeric_features:
             if col not in df.columns:
@@ -247,25 +256,25 @@ def build_drift_payload(
     test_num = _numeric_profile(test_df)
 
     class_dist = {
-        "train": {f"ESI {int(k)}": int(v) for k, v in train_df[config.TARGET_COLUMN].value_counts().sort_index().items()},
-        "test": {f"ESI {int(k)}": int(v) for k, v in test_df[config.TARGET_COLUMN].value_counts().sort_index().items()},
+        "train": {f"ESI {int(k)}": int(v) for k, v in train_df[triagegeist_schema.TARGET_COLUMN].value_counts().sort_index().items()},
+        "test": {f"ESI {int(k)}": int(v) for k, v in test_df[triagegeist_schema.TARGET_COLUMN].value_counts().sort_index().items()},
     }
 
     missing_rate = {}
-    for col in config.MISSINGNESS_FEATURES:
+    for col in triagegeist_schema.NUMERIC_FEATURE_COLUMNS:
         if col not in train_df.columns or col not in test_df.columns:
             continue
         missing_rate[col] = {
-            "train": float(train_df[col].mean()),
-            "test": float(test_df[col].mean()),
+            "train": float(train_df[col].isna().mean()),
+            "test": float(test_df[col].isna().mean()),
         }
 
     return {
         "split": {
             "train_rows": int(len(train_df)),
-            "train_patients": int(train_df[config.SUBJECT_ID_COLUMN].nunique()),
+            "train_patients": int(train_df[triagegeist_schema.PATIENT_ID_COLUMN].nunique()),
             "test_rows": int(len(test_df)),
-            "test_patients": int(test_df[config.SUBJECT_ID_COLUMN].nunique()),
+            "test_patients": int(test_df[triagegeist_schema.PATIENT_ID_COLUMN].nunique()),
         },
         "class_distribution": class_dist,
         "numeric_profile": {
@@ -277,5 +286,3 @@ def build_drift_payload(
         },
         "missingness_difference": missing_rate,
     }
-
-

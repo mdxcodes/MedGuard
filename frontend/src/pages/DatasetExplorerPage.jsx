@@ -1,44 +1,43 @@
 import { Link } from 'react-router-dom';
-import { Database, AlertTriangle, Info, BarChart3 } from 'lucide-react';
+import { Database, AlertTriangle, Info, BarChart3, ShieldCheck } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { PageShell, SectionCard, StatMetric, EmptyState } from '../components/ui/states';
-import dataQuality from '../../../reports/data_quality_report.json';
-import modelEval from '../../../reports/model_evaluation.json';
+import datasetProfile from '../../../reports/triagegeist/dataset_profile.json';
+import benchmarkResults from '../../../reports/triagegeist/benchmark_results.json';
 
 export default function DatasetExplorerPage() {
-  const classDist = dataQuality.label_distribution || {};
-  const missing = dataQuality.missing_percent || {};
-  const featStats = dataQuality.feature_stats || {};
-  const rowCounts = dataQuality.row_counts || {};
-  const features = Object.keys(featStats).sort();
-  const total = rowCounts.modelling_rows || 1;
+  const profile = datasetProfile || {};
+  const benchmark = benchmarkResults || {};
+  const dist = profile?.target_distribution || {};
+  const rowCounts = profile?.row_counts || {};
+  const total = rowCounts?.modelling_rows ?? 1;
 
   return (
     <div className="space-y-8">
       <PageShell
         title="Dataset explorer"
-        subtitle="Aggregate statistics from the audited MIMIC-IV-ED v2.2 demo subset. Raw patient records are not displayed — all values come from versioned research reports."
+        subtitle="Aggregate statistics from the Triagegeist synthetic dataset. Raw patient records are not displayed — all values come from versioned research reports."
         breadcrumb="Research · Dataset Explorer"
       />
 
       {/* Overview */}
-      <SectionCard title="Dataset overview" badge="MIMIC-IV-ED v2.2 · ODbL licensed">
+      <SectionCard title="Dataset overview" badge="Triagegeist synthetic · Research use only">
         <div className="grid sm:grid-cols-4 gap-4">
-          <StatMetric value={formatNumber(rowCounts.modelling_rows)} label="Modelling rows" subtitle="From joined dataset" tone="primary" />
-          <StatMetric value={formatNumber(modelEval.n_patients)} label="Unique patients" subtitle="Grouped split prevents leakage" tone="primary" />
-          <StatMetric value={formatNumber(rowCounts.train_patients)} label="Train patients" subtitle="GroupShuffleSplit" tone="primary" />
+          <StatMetric value={formatNumber(rowCounts.modelling_rows)} label="Modelling rows" subtitle="Training dataset" tone="primary" />
+          <StatMetric value={formatNumber(rowCounts.train_patients)} label="Train patients" subtitle="Grouped split prevents leakage" tone="primary" />
+          <StatMetric value={formatNumber(rowCounts.test_rows)} label="Test rows" subtitle="Held out" tone="warning" />
           <StatMetric value={formatNumber(rowCounts.test_patients)} label="Test patients" subtitle="Held out" tone="warning" />
         </div>
         <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
-          Raw MIMIC data is ODbL-licensed and not committed or exposed here. Target column preserved as original five-level ESI acuity.
+          Triagegeist is a synthetic dataset. Aggregate statistics only — no patient identifiers exposed.
         </div>
       </SectionCard>
 
       {/* Class distribution */}
-      <SectionCard title="ESI class distribution (modelling set)" badge={`n = ${formatNumber(total)}`} icon={<BarChart3 className="w-4 h-4" />}>
+      <SectionCard title="ESI class distribution (training)" badge={`n = ${formatNumber(total)}`} icon={<BarChart3 className="w-4 h-4" />}>
         <div className="grid grid-cols-5 gap-2">
           {[1, 2, 3, 4, 5].map(lvl => {
-            const count = classDist[`ESI ${lvl}`] ?? 0;
+            const count = dist[`ESI ${lvl}`] ?? 0;
             const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
             return (
               <div key={lvl} className="rounded-lg p-3 text-center bg-surface border border-border">
@@ -49,17 +48,36 @@ export default function DatasetExplorerPage() {
             );
           })}
         </div>
-        <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted">
-          ESI 4 has 2 examples (sparse). ESI 5 has 0 (absent) — not fabricated, simply not present in this cohort.
+        <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
+          ESI 4 may be sparse; ESI 5 may have few or zero examples — per-class metrics for those levels are unstable.
         </div>
       </SectionCard>
 
-      {/* Missing data + features side by side */}
+      {/* Benchmark results */}
+      {Object.keys(benchmark).length > 0 && (
+        <SectionCard title="Model benchmarks" badge="Validation holdout" icon={<BarChart3 className="w-4 h-4" />}>
+          <div className="grid sm:grid-cols-3 gap-4 mt-3">
+            {[['dummy', 'Dummy baseline'], ['logistic_regression', 'Logistic Regression'], ['random_forest', 'Random Forest']].map(([key, label]) => {
+              const m = benchmark?.model_results?.[key];
+              if (!m) return null;
+              return (
+                <div key={key} className="rounded-lg p-3 text-center bg-surface border border-border">
+                  <div className="text-2xl font-extrabold text-primary">{m.balanced_accuracy?.toFixed(3)}</div>
+                  <div className="text-[10px] font-mono text-muted mt-1">{label}</div>
+                  <div className="text-[10px] font-mono text-muted">BA {m.macro_f1?.toFixed(3)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Missing data */}
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6">
           <SectionCard title="Missing data (% of modelling rows)" badge="Per feature" icon={<AlertTriangle className="w-4 h-4" />}>
             <div className="space-y-2.5">
-              {Object.entries(missing).map(([feature, pct]) => {
+              {Object.entries(profile?.missing_percent || {}).map(([feature, pct]) => {
                 const v = Number(pct);
                 return (
                   <div key={feature} className="flex items-center gap-3">
@@ -72,19 +90,16 @@ export default function DatasetExplorerPage() {
                 );
               })}
             </div>
-            <div className="mt-3 text-[10px] text-muted">
-              Missingness indicators added during preprocessing (e.g. temperature_missing).
-            </div>
           </SectionCard>
         </div>
         <div className="lg:col-span-6">
-          <SectionCard title="Continuous feature summaries" badge="Vitals · pain" icon={<BarChart3 className="w-4 h-4" />}>
+          <SectionCard title="Feature summaries" badge="Vitals & context" icon={<BarChart3 className="w-4 h-4" />}>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="text-left text-muted border-b border-border">
                     <th className="py-2 pr-3 font-medium">Feature</th>
-                    <th className="py-2 pr-3 font-medium text-right">n</th>
+                    <th className="py-2 pr-3 font-medium text-right">n valid</th>
                     <th className="py-2 pr-3 font-medium text-right">Median</th>
                     <th className="py-2 pr-3 font-medium text-right">Mean</th>
                     <th className="py-2 pr-3 font-medium text-right">Min</th>
@@ -92,29 +107,24 @@ export default function DatasetExplorerPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {features.map(f => {
-                    const s = featStats[f];
-                    return (
-                      <tr key={f}>
-                        <td className="py-2 pr-3 font-medium text-primary">{f}</td>
-                        <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.n_valid?.toFixed(0) || '—'}</td>
-                        <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.median?.toFixed(2) || '—'}</td>
-                        <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.mean?.toFixed(2) || '—'}</td>
-                        <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.min?.toFixed(2) || '—'}</td>
-                        <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.max?.toFixed(2) || '—'}</td>
-                      </tr>
-                    );
-                  })}
+                  {Object.entries(profile?.feature_stats || {}).map(([feature, s]) => (
+                    <tr key={feature}>
+                      <td className="py-2 pr-3 font-medium text-primary">{feature}</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.n_valid?.toFixed(0) || '—'}</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.median?.toFixed(2) || '—'}</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.mean?.toFixed(2) || '—'}</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.min?.toFixed(2) || '—'}</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-secondary">{s?.max?.toFixed(2) || '—'}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
-            </div>
-            <div className="mt-2 text-[10px] text-muted">
-              Temperature values shown after normalization/validation checks. Arrival transport and chief complaint are categorical/text features — see preprocessing below.
             </div>
           </SectionCard>
         </div>
       </div>
 
+      {/* Preprocessing transparency */}
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
           <SectionCard title="Preprocessing transparency" badge="Leakage-safe" icon={<ShieldCheck className="w-4 h-4" />}>
@@ -132,11 +142,11 @@ export default function DatasetExplorerPage() {
         <div className="lg:col-span-5">
           <SectionCard title="Class imbalance & limitations" badge="Read first" icon={<AlertTriangle className="w-4 h-4" />}>
             <ul className="space-y-2 text-sm text-warning-foreground leading-relaxed">
-              <li><strong>Severe imbalance:</strong> ESI 2 (46.9%) and ESI 3 (43.5%) dominate; ESI 1 is 8.7%.</li>
-              <li><strong>Sparse class:</strong> ESI 4 has 2 examples — per-class metrics unstable.</li>
-              <li><strong>Absent class:</strong> ESI 5 has 0 labelled rows — probabilities always 0.0.</li>
-              <li><strong>Small cohort:</strong> {formatNumber(total)} visits from {formatNumber(modelEval.n_patients)} unique patients.</li>
-              <li><strong>Not clinically validated:</strong> Research prototype only.</li>
+              <li><strong className="text-primary">Severe imbalance:</strong> ESI 2 and ESI 3 dominate; ESI 1 is sparse.</li>
+              <li><strong className="text-primary">Sparse class:</strong> ESI 4 has few examples — per-class metrics unstable.</li>
+              <li><strong className="text-primary">Absent class:</strong> ESI 5 may have 0 labelled rows — probabilities always 0.0.</li>
+              <li><strong className="text-primary">Synthetic cohort:</strong> {formatNumber(total)} visits demonstrates methodology, not clinical performance.</li>
+              <li><strong className="text-primary">Not clinically validated:</strong> Research prototype only.</li>
             </ul>
           </SectionCard>
         </div>

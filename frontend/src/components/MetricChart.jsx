@@ -1,41 +1,52 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-export default function MetricChart() {
-  const data = [
-    { model: 'Dummy MF', f1: 0.20, acc: 0.33, label: 'Baseline' },
-    { model: 'Dummy Strat', f1: 0.24, acc: 0.26, label: 'Baseline' },
-    { model: 'Logistic Reg.', f1: 0.55, acc: 0.54, label: 'Candidate' },
-    { model: 'Random Forest', f1: 0.57, acc: 0.60, label: 'Selected' },
-  ];
-
+export default function MetricChart({
+  holdoutMacroF1,
+  holdoutBalancedAcc,
+  holdoutQWK,
+  cvMacroF1,
+  cvStdMacroF1,
+  cvBalancedAcc,
+  cvStdBalancedAcc,
+  cvQWK,
+  cvStdQWK,
+}) {
   return (
     <div className="rounded-2xl bg-surface border border-border shadow-card p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-primary tracking-tight">Cross-Validation Performance (5-fold grouped)</h3>
-        <span className="text-[10px] font-mono text-text-muted bg-surface-soft px-2 py-0.5 rounded-md border border-border-subtle">Macro-F1 ± std</span>
+        <span className="text-[10px] font-mono text-muted bg-surface-soft px-2 py-0.5 rounded-md border border-border-subtle">Macro-F1 ± std</span>
       </div>
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barSize={36}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="model" tick={{ fontSize: 11, fill: '#475569' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-            <YAxis domain={[0, 0.7]} tick={{ fontSize: 11, fill: '#475569' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-            <Tooltip
-              contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13, fontFamily: 'Inter, sans-serif' }}
-              cursor={{ fill: '#f1f5f9' }}
-              formatter={(v) => [v.toFixed(3), '']}
-            />
-            <Bar dataKey="f1" fill="#14b8a6" radius={[6, 6, 0, 0]} name="Mean Macro-F1" />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="mt-4 grid grid-cols-3 gap-4 text-[10px] font-mono text-muted">
+        <div className="text-center">
+          <div className="text-xs font-bold text-primary mb-1">Macro-F1</div>
+          <div className="tabular-nums">{cvMacroF1?.toFixed(3)}</div>
+          <div className="opacity-70">± {cvStdMacroF1?.toFixed(3)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs font-bold text-primary mb-1">Balanced Acc</div>
+          <div className="tabular-nums">{cvBalancedAcc?.toFixed(3)}</div>
+          <div className="opacity-70">± {cvStdBalancedAcc?.toFixed(3)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs font-bold text-primary mb-1">QWK</div>
+          <div className="tabular-nums">{cvQWK?.toFixed(3)}</div>
+          <div className="opacity-70">± {cvStdQWK?.toFixed(3)}</div>
+        </div>
       </div>
-      <div className="grid grid-cols-4 gap-2 mt-3 text-center">
-        {data.map(d => (
-          <div key={d.model} className={`rounded-lg py-2 text-xs ${d.label === 'Selected' ? 'bg-teal-900/40 text-teal' : 'bg-surface-soft text-text-secondary'}`}>
-            <div className="font-extrabold text-sm">{d.f1.toFixed(2)}</div>
-            <div className="font-mono text-[10px] opacity-70">{d.model}</div>
-          </div>
-        ))}
+      <div className="mt-6 grid grid-cols-3 gap-4 text-[10px] font-mono text-muted">
+        <div className="text-center">
+          <div className="text-xs font-bold text-primary mb-1">Holdout Macro-F1</div>
+          <div className="tabular-nums">{holdoutMacroF1?.toFixed(3)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs font-bold text-primary mb-1">Holdout Balanced Acc</div>
+          <div className="tabular-nums">{holdoutBalancedAcc?.toFixed(3)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs font-bold text-primary mb-1">Holdout QWK</div>
+          <div className="tabular-nums">{holdoutQWK?.toFixed(3)}</div>
+        </div>
       </div>
     </div>
   );

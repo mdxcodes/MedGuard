@@ -1,90 +1,139 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Activity, BrainCircuit, Waves, ShieldCheck, AlertTriangle, BarChart3 } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import MetricChart from '../components/MetricChart';
 import ConfusionMatrix from '../components/ConfusionMatrix';
-import { PageShell, SectionCard, StatMetric } from '../components/ui/states';
-
-const CLASS_SUPPORT = [
-  { lvl: 1, n: 18, pct: '8.7%', bar: 8.7, tone: 'rose', note: 'Sparse' },
-  { lvl: 2, n: 97, pct: '46.9%', bar: 46.9, tone: 'amber', note: 'Dominant' },
-  { lvl: 3, n: 90, pct: '43.5%', bar: 43.5, tone: 'teal', note: 'Dominant' },
-  { lvl: 4, n: 2, pct: '1.0%', bar: 1.0, tone: 'slate', note: 'Very sparse' },
-  { lvl: 5, n: 0, pct: '0.0%', bar: 0, tone: 'slate', note: 'Absent' },
-];
-
-const CV_AGG_CONFUSION = [[12, 6, 0, 0, 0], [10, 53, 34, 0, 0], [1, 29, 60, 0, 0], [0, 1, 1, 0, 0], [0, 0, 0, 0, 0]];
+import { PageShell, SectionCard, StatMetric, LoadingState } from '../components/ui/states';
+import { apiFetch } from '../lib/api';
 
 export default function OverviewPage() {
+  const [metrics, setMetrics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiFetch('/metrics');
+        setMetrics(data);
+      } catch (e) {
+        setError('Failed to load evaluation metrics.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return <LoadingState message="Loading evaluation metrics…" />;
+  if (error) {
+    return (
+      <div className="max-w-5xl mx-auto py-12">
+        <div className="rounded-xl border border-error/20 bg-error-bg p-5 text-center">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-5 h-5 rounded-full bg-error flex items-center justify-center shrink-0">
+              <span className="text-[14px]">💥</span>
+            </div>
+            <div className="flex-1">
+              <div className="font-bold text-error">Metrics unavailable</div>
+              <div className="text-xs text-secondary mt-1">{error}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const ds = metrics.dataset || {};
+  const classDist = ds.label_distribution || {};
+  const totalRows = ds.n_rows ?? 0;
+  const m = metrics.metrics || {};
+  const holdout = m.holdout || {};
+  const cv = m.cv || {};
+  const esi4Count = classDist['ESI 4'] ?? 0;
+  const esi4Pct = totalRows > 0 ? ((esi4Count / totalRows) * 100).toFixed(2) : '0.0';
+  const esi5Count = classDist['ESI 5'] ?? 0;
+  const esi23Share = totalRows > 0 ? (((classDist['ESI 2'] ?? 0) + (classDist['ESI 3'] ?? 0)) / totalRows * 100).toFixed(1) : '0.0';
+
   return (
     <div className="space-y-8">
       <DisclaimerBanner />
 
       <PageShell
-        title="Understand triage predictions"
-        subtitle="Explainable AI for emergency-department triage acuity estimation — a reproducible, leakage-safe ML pipeline trained on the audited MIMIC-IV-ED demo subset with exact SHAP explainability."
+        title="Understand Triage Predictions"
+        subtitle="Explainable AI for emergency-department triage acuity estimation — a reproducible, leakage-safe ML pipeline trained on the audited Triagegeist synthetic dataset with exact SHAP explainability."
         breadcrumb="MedGuard · Triage One"
       />
 
       {/* Primary action + model status */}
       <section className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8">
-          <SectionCard title="Start a synthetic assessment" badge="Primary action">
+          <SectionCard title="Start a Synthetic Assessment" badge="Primary Action">
             <p className="text-sm text-secondary mb-6">
               Try the model on a synthetic patient case. All inputs are fictional — no real patient data is used.
             </p>
             <div className="grid sm:grid-cols-3 gap-3">
               <button
                 onClick={() => {
-                  const sample = { temperature: 37.2, heartrate: 112, resprate: 28, o2sat: 88, sbp: 94, dbp: 62, pain: 7, arrival_transport: 'AMBULANCE', chiefcomplaint: 'SHORTNESS OF BREATH' };
+                  const sample = { heart_rate: 112, respiratory_rate: 28, temperature_c: 37.2, spo2: 88, systolic_bp: 94, diastolic_bp: 62, pain_score: 7, arrival_mode: 'AMBULANCE', chief_complaint_system: 'Respiratory', age: 68, sex: 'F', insurance_type: 'Medicare', arrival_hour: 14, shock_index: 1.19, num_prior_ed_visits_12m: 3, num_active_medications: 5 };
                   const params = Object.entries(sample).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
                   window.location.href = `/assessment?${params}`;
                 }}
                 className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold px-5 py-3 rounded-xl shadow-lg shadow-primary/20 transition"
               >
-                <Activity className="w-4 h-4" /> Respiratory distress
+                <Activity className="w-4 h-4" /> Respiratory Distress
               </button>
               <button
                 onClick={() => {
-                  const sample = { temperature: 36.5, heartrate: 82, resprate: 14, o2sat: 98, sbp: 128, dbp: 78, pain: 4, arrival_transport: 'WALK IN', chiefcomplaint: 'ARM INJURY' };
+                  const sample = { heart_rate: 82, respiratory_rate: 14, temperature_c: 36.5, spo2: 98, systolic_bp: 128, diastolic_bp: 78, pain_score: 4, arrival_mode: 'WALK IN', chief_complaint_system: 'Trauma', age: 32, sex: 'M', insurance_type: 'Private', arrival_hour: 10, shock_index: 0.64, num_prior_ed_visits_12m: 1, num_active_medications: 1 };
                   const params = Object.entries(sample).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
                   window.location.href = `/assessment?${params}`;
                 }}
                 className="flex items-center gap-2 border border-border bg-surface hover:bg-surface-lift text-primary font-semibold px-5 py-3 rounded-xl transition"
               >
-                <Activity className="w-4 h-4" /> Stable trauma
+                <Activity className="w-4 h-4" /> Stable Trauma
               </button>
               <button
                 onClick={() => {
-                  const sample = { temperature: 38.1, heartrate: 118, resprate: 22, o2sat: 92, sbp: 102, dbp: 68, pain: 9, arrival_transport: 'AMBULANCE', chiefcomplaint: 'ALTERED LEVEL OF CONSCIOUSNESS' };
+                  const sample = { heart_rate: 118, respiratory_rate: 22, temperature_c: 38.1, spo2: 92, systolic_bp: 102, diastolic_bp: 68, pain_score: 9, arrival_mode: 'AMBULANCE', chief_complaint_system: 'Neurological', age: 74, sex: 'F', insurance_type: 'Medicare', arrival_hour: 2, shock_index: 1.16, num_prior_ed_visits_12m: 5, num_active_medications: 8 };
                   const params = Object.entries(sample).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
                   window.location.href = `/assessment?${params}`;
                 }}
                 className="flex items-center gap-2 border border-border bg-surface hover:bg-surface-lift text-primary font-semibold px-5 py-3 rounded-xl transition"
               >
-                <Activity className="w-4 h-4" /> Altered mental status
+                <Activity className="w-4 h-4" /> Altered Mental Status
               </button>
             </div>
           </SectionCard>
         </div>
 
         <div className="lg:col-span-4 space-y-6">
-          <StatMetric value="Random Forest" label="Active model" subtitle="35 features · seed 20260915" tone="info" />
-          <StatMetric value="0.574" label="Macro-F1 (CV)" subtitle="Mean ± std 0.105 across 5 folds" tone="primary" />
-          <StatMetric value="44 / 12" label="Holdout cohort" subtitle="Visits / patients — grouped split" tone="warning" />
+          <StatMetric value={m.model_name ?? 'Random Forest'} label="Active Model" subtitle={ds.random_seed ? `seed ${ds.random_seed}` : ''} tone="info" />
+          <StatMetric value={cv.mean_macro_f1?.toFixed(3) ?? '—'} label="Macro-F1 (CV)" subtitle={`± ${cv.std_macro_f1?.toFixed(3)} across ${cv.n_folds ?? 5} folds`} tone="primary" />
+          <StatMetric value={`${ds.test_rows ?? '—'} / ${ds.test_patients ?? '—'}`} label="Holdout Cohort" subtitle="Visits / patients — grouped split" tone="warning" />
         </div>
       </section>
 
       {/* Performance visualization */}
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
-          <SectionCard title="Evaluated performance" badge="Grouped 5-fold CV">
-            <MetricChart />
+          <SectionCard title="Evaluated Performance" badge="Grouped 5-Fold CV">
+            <MetricChart
+              holdoutMacroF1={holdout.macro_f1}
+              holdoutBalancedAcc={holdout.balanced_accuracy}
+              holdoutQWK={holdout.quadratic_weighted_kappa}
+              cvMacroF1={cv.mean_macro_f1}
+              cvStdMacroF1={cv.std_macro_f1}
+              cvBalancedAcc={cv.mean_balanced_accuracy}
+              cvStdBalancedAcc={cv.std_balanced_accuracy}
+              cvQWK={cv.mean_quadratic_weighted_kappa}
+              cvStdQWK={cv.std_quadratic_weighted_kappa}
+            />
           </SectionCard>
         </div>
         <div className="lg:col-span-5 space-y-6">
-          <SectionCard title="Confusion matrix (CV aggregate)" badge="True → Pred">
-            <ConfusionMatrix matrix={CV_AGG_CONFUSION} />
+          <SectionCard title="Confusion Matrix (CV Aggregate)" badge="True → Pred">
+            <ConfusionMatrix matrix={cv.aggregate_confusion_matrix} labels={['ESI 1', 'ESI 2', 'ESI 3', 'ESI 4', 'ESI 5']} />
           </SectionCard>
         </div>
       </div>
@@ -92,51 +141,55 @@ export default function OverviewPage() {
       {/* Dataset + limitations row */}
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
-          <SectionCard title="Dataset snapshot" badge="MIMIC-IV-ED v2.2 demo">
+          <SectionCard title="Dataset Snapshot" badge="Triagegeist Synthetic">
             <div className="grid sm:grid-cols-3 gap-4">
-              <StatMetric value="207" label="Labelled visits" subtitle="After label filtering" tone="primary" />
-              <StatMetric value="56" label="Unique patients" subtitle="Grouped split prevents leakage" tone="primary" />
-              <StatMetric value="90.3%" label="ESI 2 + 3 share" subtitle="Strong class imbalance" tone="warning" />
+              <StatMetric value={totalRows.toLocaleString()} label="Labelled Visits" subtitle="From Triagegeist train.csv" tone="primary" />
+              <StatMetric value={ds.n_patients?.toLocaleString() ?? '—'} label="Unique Patients" subtitle="Grouped split prevents leakage" tone="primary" />
+              <StatMetric value={esi23Share} label="ESI 2 + 3 Share" subtitle="Strong class imbalance" tone="warning" />
             </div>
             <div className="mt-5">
-              <h4 className="text-xs font-mono text-muted uppercase tracking-wider mb-3">Class support</h4>
+              <h4 className="text-xs font-mono text-muted uppercase tracking-wider mb-3">Class Support</h4>
               <div className="space-y-1.5">
-                {CLASS_SUPPORT.map(s => (
-                  <div key={s.lvl} className="flex items-center gap-3">
-                    <div className="w-7 shrink-0 text-xs font-mono font-medium text-secondary">{`ESI ${s.lvl}`}</div>
-                    <div className="flex-1 h-1.5 bg-surface-lift rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${getToneColor(s.tone)}`} style={{ width: `${s.bar}%` }} />
+                {[1, 2, 3, 4, 5].map(lvl => {
+                  const count = classDist[`ESI ${lvl}`] ?? 0;
+                  const pct = totalRows > 0 ? ((count / totalRows) * 100).toFixed(1) : '0.0';
+                  return (
+                    <div key={lvl} className="flex items-center gap-3">
+                      <div className="w-7 shrink-0 text-xs font-mono font-medium text-secondary">{`ESI ${lvl}`}</div>
+                      <div className="flex-1 h-1.5 bg-surface-lift rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${getToneColor(lvl === 4 ? 'slate' : lvl === 5 ? 'slate' : lvl === 1 ? 'rose' : lvl === 2 ? 'amber' : 'teal')}`} style={{ width: `${parseFloat(pct)}%` }} />
+                      </div>
+                      <div className="w-16 text-right text-xs font-mono text-secondary">{count} · {pct}%</div>
+                      <span className="w-14 text-[10px] font-mono text-muted">{lvl === 4 ? 'Very Sparse' : lvl === 5 ? 'Absent' : lvl === 1 ? 'Sparse' : 'Dominant'}</span>
                     </div>
-                    <div className="w-16 text-right text-xs font-mono text-secondary">{s.n} · {s.pct}</div>
-                    <span className="w-14 text-[10px] font-mono text-muted">{s.note}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
-              ESI 4 has only 2 examples (0.97%) and ESI 5 has 0 — metrics for those levels are not reliable.
-              Patient repetition is significant (max 23 visits per patient).
+              ESI 4 has only {esi4Count} examples ({esi4Pct}%) and ESI 5 has {esi5Count} — metrics for those levels are not reliable.
+              Patient repetition may exist in the synthetic dataset.
             </div>
           </SectionCard>
         </div>
         <div className="lg:col-span-5">
-          <SectionCard title="Read before proceeding" badge="Limitations" icon={<AlertTriangle className="w-4 h-4" />}>
+          <SectionCard title="Read Before Proceeding" badge="Limitations" icon={<AlertTriangle className="w-4 h-4" />}>
             <ul className="space-y-3 text-sm text-secondary leading-relaxed">
               <li className="flex gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-                <span className="flex-1"><strong>Accuracy alone is misleading.</strong> With 46.9% ESI 2 and 43.5% ESI 3, macro-F1 and balanced accuracy correct for imbalance.</span>
+                <span className="flex-1"><strong>Accuracy alone is misleading.</strong> With severe class imbalance toward ESI 2–3, macro-F1 and balanced accuracy correct for imbalance.</span>
               </li>
               <li className="flex gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-                <span className="flex-1"><strong>Grouped cross-validation is mandatory.</strong> One patient contributes up to 23 visits — a row-level split would leak patient memorization.</span>
+                <span className="flex-1"><strong>Grouped cross-validation is mandatory.</strong> Patient-grouped splitting prevents leakage from repeated encounters.</span>
               </li>
               <li className="flex gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-                <span className="flex-1"><strong>ESI 5 is unlearnable.</strong> Zero labelled rows mean probability is always 0.0 — never presented as validated.</span>
+                <span className="flex-1"><strong>ESI 5 may be unlearnable.</strong> If ESI 5 has zero or very few labelled rows, probabilities for that class may be unreliable.</span>
               </li>
               <li className="flex gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-                <span className="flex-1"><strong>Small cohort.</strong> 207 visits / 56 patients demonstrates methodology, not clinical performance.</span>
+                <span className="flex-1"><strong>Synthetic dataset.</strong> {totalRows.toLocaleString()} visits demonstrates methodology, not clinical performance.</span>
               </li>
             </ul>
           </SectionCard>
@@ -144,9 +197,9 @@ export default function OverviewPage() {
       </div>
 
       {/* Methods ribbon */}
-      <SectionCard title="How MedGuard works" badge="Methodology" icon={<ShieldCheck className="w-4 h-4" />}>
+      <SectionCard title="How MedGuard Works" badge="Methodology" icon={<ShieldCheck className="w-4 h-4" />}>
         <div className="flex flex-wrap gap-2 mb-4">
-          {['Dataset audit', 'Cleaning', 'Feature pipeline', 'Grouped split', 'Cross-validation', 'SHAP explanation', 'API inference'].map(s => (
+          {['Dataset Audit', 'Cleaning', 'Feature Pipeline', 'Grouped Split', 'Cross-validation', 'SHAP Explanation', 'API Inference'].map(s => (
             <a key={s} href="/methodology" className="text-xs font-medium bg-surface-soft text-secondary px-3 py-1.5 rounded-full border border-border hover:border-primary/30 hover:text-primary transition">
               {s}
             </a>
@@ -154,9 +207,9 @@ export default function OverviewPage() {
         </div>
         <div className="grid sm:grid-cols-5 gap-3">
           {[
-            { title: 'Data Audit', desc: 'Checksum verified · target distribution confirmed', icon: Waves },
-            { title: 'Cleaning', desc: 'Temp C/F · BP outliers · pain parsing', icon: Activity },
-            { title: 'Pipeline', desc: 'Median impute · scale · one-hot · TF-IDF', icon: BrainCircuit },
+            { title: 'Data Audit', desc: 'Schema verified · target distribution confirmed', icon: Waves },
+            { title: 'Cleaning', desc: 'Vital sign range checks · missingness indicators', icon: Activity },
+            { title: 'Pipeline', desc: 'Median impute · scale · one-hot · derived features', icon: BrainCircuit },
             { title: 'Evaluation', desc: 'Patient-grouped CV · macro-F1 / QWK', icon: BarChart3 },
             { title: 'Inference', desc: 'Saved pipeline · exact SHAP', icon: ShieldCheck },
           ].map(step => (
@@ -172,12 +225,5 @@ export default function OverviewPage() {
   );
 }
 
-function getToneColor(tone) {
-  const map = {
-    teal: 'bg-teal',
-    rose: 'bg-rose-400',
-    amber: 'bg-amber-400',
-    slate: 'bg-slate-400',
-  };
-  return map[tone] || 'bg-slate-400';
-}
+const TONE_MAP = { teal: 'bg-teal', rose: 'bg-rose-400', amber: 'bg-amber-400', slate: 'bg-slate-400' };
+function getToneColor(tone) { return TONE_MAP[tone] ?? 'bg-slate-400'; }

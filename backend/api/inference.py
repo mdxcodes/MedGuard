@@ -7,7 +7,7 @@ production deployment can swap in a different inference backend if needed.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -25,31 +25,29 @@ from backend.api.schemas import (
     PredictResponse,
     Prediction,
 )
-from backend.ml import config as ml_config
-try:
-    from backend.ml.input_quality import assess_input_quality
-except Exception:
-    assess_input_quality = None
+from backend.ml import triagegeist_schema
+from backend.ml.triagegeist_preprocessing import (
+    build_preprocessor,
+    build_feature_frame,
+    leakage_free_feature_names,
+)
+from backend.ml.triagegeist_validation import assess_input_quality
 try:
     from backend.ml.uncertainty import compute_uncertainty_metrics
 except Exception:
     compute_uncertainty_metrics = None
-from backend.ml.validation import (
-    normalize_temperature,
-    parse_pain,
-    validate_blood_pressure,
-    validate_vitals,
-    normalize_chiefcomplaint,
-    add_missingness_indicators,
-)
 
 log = logging.getLogger("medguard.api.inference")
 
 
 def _normalize_assessment(req: AssessmentRequest) -> pd.DataFrame:
-    """Build a single-row DataFrame from the validated Pydantic request."""
+    """Build a single-row DataFrame from the validated Pydantic request.
+
+    Maps Triagegeist API field names to preprocessing-compatible names.
+    Missing fields become NaN (handled by imputation downstream).
+    """
     row: dict[str, Any] = {
-        ml_config.TARGET_COLUMN: np.nan,  # placeholder; dropped before prediction
+        triagegeist_schema.TARGET_COLUMN: np.nan,  # placeholder; dropped before prediction
     }
 
     def maybe_float(val: Any) -> Optional[float]:
@@ -63,50 +61,73 @@ def _normalize_assessment(req: AssessmentRequest) -> pd.DataFrame:
         except (TypeError, ValueError):
             return None
 
-    # Temperature: accept either °C or °F raw; the validation function converts.
-    temp_raw = maybe_float(req.temperature)
-    row["temperature"] = temp_raw
+    # Numeric vitals
+    row["heart_rate"] = maybe_float(req.heart_rate)
+    row["respiratory_rate"] = maybe_float(req.respiratory_rate)
+    row["temperature_c"] = maybe_float(req.temperature_c)
+    row["spo2"] = maybe_float(req.spo2)
+    row["systolic_bp"] = maybe_float(req.systolic_bp)
+    row["diastolic_bp"] = maybe_float(req.diastolic_bp)
+    row["pain_score"] = maybe_float(req.pain_score)
+    row["age"] = maybe_float(req.age)
+    row["arrival_hour"] = maybe_float(req.arrival_hour)
+    row["shock_index"] = maybe_float(req.shock_index)
+    row["num_prior_ed_visits_12m"] = maybe_float(req.num_prior_ed_visits_12m)
+    row["num_active_medications"] = maybe_float(req.num_active_medications)
 
-    for col in ("heartrate", "resprate", "o2sat", "sbp", "dbp", "pain"):
-        row[col] = maybe_float(getattr(req, col))
-
-    # Categoricals — accept nulls (become 'unknown' / 'missing' downstream).
-    transport = req.arrival_transport
-    row["arrival_transport"] = (
-        str(transport).strip().upper() if transport is not None else "unknown"
+    # Categoricals
+    transport = req.arrival_mode
+    row["arrival_mode"] = (
+        str(transport).strip().upper() if transport is not None else "UNKNOWN"
     )
 
-    complaint = req.chiefcomplaint
-    row["chiefcomplaint"] = (
-        str(complaint).strip() if complaint is not None else ""
+    sex = req.sex
+    row["sex"] = str(sex).strip().upper() if sex is not None else "UNKNOWN"
+
+    insurance = getattr(req, "insurance_type", None)
+    row["insurance_type"] = (
+        str(insurance).strip().title() if insurance is not None else "Unknown"
     )
+
+    complaint_system = req.chief_complaint_system
+    row["chief_complaint_system"] = (
+        str(complaint_system).strip().title() if complaint_system is not None else "Unknown"
+    )
+
+    # Build frame with ALL expected feature columns (missing ones get NaN)
+    all_feature_cols = list(triagegeist_schema.ALL_FEATURE_COLUMNS)
+    for col in all_feature_cols:
+        if col not in row:
+            row[col] = None
 
     frame = pd.DataFrame([row])
     return frame
 
 
 def _apply_validation(frame: pd.DataFrame) -> pd.DataFrame:
-    """Apply Phase-1 validation rules to produce a clean feature frame."""
-    # Temperature
-    frame["temperature"], _ = normalize_temperature(frame["temperature"])
-    # Pain
-    frame["pain"], _ = parse_pain(frame["pain"])
-    # Blood pressure
-    frame["sbp"], frame["dbp"], _ = validate_blood_pressure(
-        frame.get("sbp", pd.Series(dtype=float)),
-        frame.get("dbp", pd.Series(dtype=float)),
-    )
-    # Remaining vitals
-    frame, _ = validate_vitals(frame)
-    # Chief complaint
-    frame["chiefcomplaint"], _ = normalize_chiefcomplaint(frame["chiefcomplaint"])
-    # Missingness indicators
-    frame = add_missingness_indicators(
-        frame,
-        ("temperature", "heartrate", "resprate", "o2sat", "sbp", "dbp", "pain"),
-    )
-    # Drop the placeholder target column before the pipeline sees it.
-    frame.drop(columns=[ml_config.TARGET_COLUMN], errors="ignore", inplace=True)
+    """Apply validation rules to produce a clean feature frame.
+
+    For Triagegeist, we apply range clamping (values outside observed
+    training ranges become NaN and are imputed downstream) and ensure
+    boolean columns are properly typed.
+    """
+    # Boolean columns: fill NaN with False, ensure boolean dtype
+    for col in triagegeist_schema.BOOLEAN_FEATURE_COLUMNS:
+        if col in frame.columns:
+            frame[col] = frame[col].fillna(False).astype(bool)
+
+    # Clamp numeric features to valid ranges defined in schema
+    for f in triagegeist_schema.FEATURE_FIELDS:
+        if f.dtype == "numeric" and f.name in frame.columns:
+            col = frame[f.name]
+            if f.min_value is not None:
+                col = col.where(col >= f.min_value, np.nan)
+            if f.max_value is not None:
+                col = col.where(col <= f.max_value, np.nan)
+            frame[f.name] = col
+
+    # Drop the placeholder target column before the pipeline sees it
+    frame.drop(columns=[triagegeist_schema.TARGET_COLUMN], errors="ignore", inplace=True)
     return frame
 
 
@@ -119,7 +140,8 @@ def _compute_prediction(
     sample_frame = _normalize_assessment(request)
     cleaned = _apply_validation(sample_frame)
 
-    from backend.ml.features import derive_features
+    # Apply feature engineering (derived features like shock_index)
+    from backend.ml.triagegeist_preprocessing import derive_features
     X = derive_features(cleaned)
 
     pred_idx = int(pipeline.predict(X)[0])
@@ -138,10 +160,10 @@ def _compute_prediction(
             if int(lvl) in classes
             else 0.0,
         )
-        for lvl in ml_config.ESI_LABELS
+        for lvl in triagegeist_schema.ESI_LABELS
     ]
 
-    # SHAP explanation: best-effort. If it fails, return status='unavailable'.
+    # SHAP explanation: best-effort
     explanation_status = "unavailable"
     top_features: list[dict[str, Any]] = []
     try:
@@ -203,12 +225,14 @@ def predict(request: AssessmentRequest) -> PredictResponse:
             if compute_uncertainty_metrics is not None and prediction and prediction.probabilities:
                 pvec = [pp.probability for pp in prediction.probabilities]
                 um = compute_uncertainty_metrics(pvec)
-                um["calibration_status"] = "unsupported_by_sample_size"  # conservative
+                um["calibration_status"] = "unsupported_by_sample_size"
                 uncertainty = um
         except Exception as exc:
             log.warning("Uncertainty computation failed: %s", exc)
             uncertainty = None
-        return PredictResponse(prediction=prediction, explanation=explanation, quality=quality, uncertainty=uncertainty)
+        return PredictResponse(
+            prediction=prediction, explanation=explanation, quality=quality, uncertainty=uncertainty
+        )
     except Exception as exc:  # noqa: BLE001
         log.exception("Prediction failed for request %s", request)
         return PredictResponse(

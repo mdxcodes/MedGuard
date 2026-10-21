@@ -20,7 +20,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 import sklearn
 
-from backend.ml import config
+from backend.ml import config, triagegeist_schema
 from backend.ml.features import build_preprocessor
 
 RANDOM_SEED = config.RANDOM_SEED
@@ -96,7 +96,7 @@ def persist_pipeline(
         "model_kind": type(pipeline.named_steps["estimator"]).__name__ if "estimator" in pipeline.named_steps else type(pipeline).__name__,
         "target": config.TARGET_COLUMN,
         "esi_labels": list(config.ESI_LABELS),
-        "dataset": "MIMIC-IV-ED v2.2 demo subset",
+        "dataset": triagegeist_schema.dataset_provenance()["name"],
         "training_rows": training_rows,
         "training_patients": training_patients,
         "random_seed": RANDOM_SEED,
@@ -109,7 +109,7 @@ def persist_pipeline(
             "joblib": joblib.__version__,
         },
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "note": "Demonstration model on the demo subset. Not for clinical use.",
+        "note": "Demonstration model on Triagegeist synthetic dataset. Not for clinical use.",
     }
     manifest_path = path.with_suffix(".manifest.json")
     import json as _json

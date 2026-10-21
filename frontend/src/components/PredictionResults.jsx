@@ -1,7 +1,7 @@
 import { Shield, AlertTriangle } from 'lucide-react';
 import QualityWarnings from './QualityWarnings';
 import UncertaintyIndicators from './UncertaintyIndicators';
-import { PageShell, SectionCard } from '../components/ui/states';
+import { PageShell, SectionCard, StatMetric } from '../components/ui/states';
 
 const LEVEL_LABELS = {
   1: { label: 'Highest urgency', tone: 'urgent' },
@@ -29,17 +29,21 @@ export default function PredictionResults({ result }) {
   const levelInfo = LEVEL_LABELS[predClass] ?? LEVEL_LABELS[5];
   const style = LEVEL_STYLES[levelInfo.tone];
 
+  // Extract model metadata from result if available
+  const modelName = result.model_name || 'Random Forest';
+  const modelDataset = result.dataset || 'Triagegeist';
+
   return (
     <section aria-label="Prediction result" className="space-y-6">
       {/* Prediction card */}
       <div className={`rounded-xl border shadow-sm p-6 ${style.bg} ${style.border}`}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-mono text-muted uppercase tracking-wider mb-2">Predicted acuity</div>
+            <div className="text-xs font-mono text-muted uppercase tracking-wider mb-2">Predicted Acuity</div>
             <h2 className="text-4xl font-extrabold tracking-tight text-primary leading-none">ESI {predClass}</h2>
             <p className={`text-sm font-medium mt-1 ${style.text}`}>{levelInfo.label}</p>
             <p className="text-[11px] text-muted mt-3 font-mono">
-              Random Forest · 44 train pts · 163 rows · seed 20260915
+              {modelName} · Triagegeist synthetic · seed 20260915
             </p>
           </div>
           <div className="text-right shrink-0">
@@ -54,8 +58,7 @@ export default function PredictionResults({ result }) {
           <p className="text-sm text-secondary leading-relaxed">
             The model estimates this presentation at <strong>ESI {predClass}</strong>. This is a statistical inference from vitals, derived
             physiology (shock index, pulse pressure, abnormal vital count), arrival context, and chief complaint — <strong>not</strong> a clinical
-            diagnosis. The dataset contains no ESI 5 examples and only 2 ESI 4 examples; predictions for those levels should not be interpreted
-            as validated.
+            diagnosis. The Triagegeist dataset is synthetic; predictions should not be interpreted as clinically validated.
           </p>
         </div>
 
@@ -70,13 +73,13 @@ export default function PredictionResults({ result }) {
       </div>
 
       {/* Quality Warnings */}
-      {result.quality && <SectionCard title="Input quality & OOD warnings" badge="Assessment quality"><QualityWarnings quality={result.quality} /></SectionCard>}
+      {result.quality && <SectionCard title="Input Quality & OOD Warnings" badge="Assessment quality"><QualityWarnings quality={result.quality} /></SectionCard>}
 
       {/* Uncertainty */}
-      {result.uncertainty && <SectionCard title="Prediction uncertainty" badge="Confidence indicators"><UncertaintyIndicators uncertainty={result.uncertainty} /></SectionCard>}
+      {result.uncertainty && <SectionCard title="Prediction Uncertainty" badge="Confidence indicators"><UncertaintyIndicators uncertainty={result.uncertainty} /></SectionCard>}
 
       {/* Probability bars */}
-      <SectionCard title="Class probabilities" badge="All 5 ESI levels · not calibrated">
+      <SectionCard title="Class Probabilities" badge="All 5 ESI Levels · Not Calibrated">
         <div className="space-y-3">
           {probs.map(p => {
             const pct = (p.probability || 0) * 100;
@@ -97,19 +100,19 @@ export default function PredictionResults({ result }) {
           })}
         </div>
         <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
-          ESI 5 has 0 training examples — probability is 0.0 (absent class, not validated). ESI 4 has 2 examples (very sparse).
-          These limitations are documented and must not be hidden.
+          ESI 5 may have limited support in the synthetic dataset; probabilities for that level may be unreliable.
+          ESI 4 is sparse. These limitations are documented and must not be hidden.
         </div>
       </SectionCard>
 
       {/* SHAP */}
-      <SectionCard title="Model interpretation" badge="SHAP · feature attribution">
+      <SectionCard title="Model Interpretation" badge="SHAP · Feature Attribution">
         {result.explanation && result.explanation.explanation_status === 'available' ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <Metric value={result.explanation.predicted_class} label="Explained class" />
-              <Metric value={predClass} label="Predicted class" />
-              <Metric value={result.explanation.top_features?.length || 0} label="Top features shown" />
+              <StatMetric value={result.explanation.predicted_class ?? '—'} label="Explained Class" />
+              <StatMetric value={predClass} label="Predicted Class" />
+              <StatMetric value={result.explanation.top_features?.length || 0} label="Top Features" />
             </div>
             <div className="space-y-1.5">
               {(result.explanation.top_features || []).map((f, i) => (
@@ -138,7 +141,7 @@ export default function PredictionResults({ result }) {
         ) : (
           <div className="rounded-xl border border-border/50 bg-surface-lift p-6 text-center">
             <AlertTriangle className="w-8 h-8 text-warning mx-auto mb-2" />
-            <div className="text-sm font-medium text-primary">Explanation unavailable</div>
+            <div className="text-sm font-medium text-primary">Explanation Unavailable</div>
             <div className="text-[10px] text-muted mt-1">The prediction is valid; SHAP attribution could not be computed safely. The explanation status is clearly reported rather than fabricated.</div>
           </div>
         )}
@@ -146,22 +149,67 @@ export default function PredictionResults({ result }) {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
-        <Link to="/assessment" className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium px-4 py-3 rounded-xl shadow-md shadow-primary/10 transition">
-          New assessment <ArrowUpRight className="w-3.5 h-3.5" />
-        </Link>
-        <Link to="/performance" className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3 rounded-xl border border-border hover:bg-surface-lift transition">
-          Model performance <ArrowUpRight className="w-3.5 h-3.5" />
-        </Link>
+        <a href="/assessment" className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium px-4 py-3 rounded-xl shadow-md shadow-primary/10 transition">
+          New Assessment <ArrowRight className="w-3.5 h-3.5" />
+        </a>
+        <a href="/performance" className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3 rounded-xl border border-border hover:bg-surface-lift transition">
+          Model Performance <ArrowUpRight className="w-3.5 h-3.5" />
+        </a>
       </div>
-    </section>
-  );
-}
 
-function Metric({ value, label }) {
-  return (
-    <div className="bg-surface border border-border rounded-xl p-3 text-center">
-      <div className="text-xl font-extrabold text-primary">{value}</div>
-      <div className="text-[10px] font-mono text-muted mt-0.5 uppercase tracking-wider">{label}</div>
-    </div>
+      {/* Submitted input summary */}
+      {result._submittedInput && (
+        <SectionCard title="Submitted Assessment" badge="Input Values" icon={<Shield className="w-4 h-4" />}>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-lg border border-border bg-surface-lift p-3">
+              <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-2">Vital Signs</div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Heart Rate</span>
+                  <span>{result._submittedInput.heart_rate ?? '—'} bpm</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Resp. Rate</span>
+                  <span>{result._submittedInput.respiratory_rate ?? '—'} /min</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Temperature</span>
+                  <span>{result._submittedInput.temperature_c ?? '—'} °C</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">O₂ Saturation</span>
+                  <span>{result._submittedInput.spo2 ?? '—'} %</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Systolic BP</span>
+                  <span>{result._submittedInput.systolic_bp ?? '—'} mmHg</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Diastolic BP</span>
+                  <span>{result._submittedInput.diastolic_bp ?? '—'} mmHg</span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-lift p-3">
+              <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-2">Context</div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Pain Score</span>
+                  <span>{result._submittedInput.pain_score ?? '—'} /10</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono tabular-nums">
+                  <span className="text-secondary">Arrival Mode</span>
+                  <span>{result._submittedInput.arrival_mode ?? '—'}</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono text-secondary break-words">
+                  <span className="text-secondary">Chief Complaint</span>
+                  <span>{result._submittedInput.chief_complaint_system ?? '—'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+      )}
+    </section>
   );
 }

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Menu, Waves } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { apiFetchOptional } from '../lib/api';
 
 const PAGE_TITLES = {
   '/': 'Overview',
@@ -21,7 +22,29 @@ const PAGE_TITLES = {
 export default function Header({ onMenu }) {
   const loc = useLocation();
   const pageTitle = PAGE_TITLES[loc.pathname] || '';
-  const [hover, setHover] = useState(false);
+  const [apiStatus, setApiStatus] = useState('unknown'); // 'ok' | 'error' | 'unknown'
+  const [modelReady, setModelReady] = useState('unknown'); // 'ready' | 'unavailable' | 'unknown'
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Check health
+      const health = await apiFetchOptional('/health');
+      if (!cancelled) {
+        setApiStatus(health ? 'ok' : 'error');
+      }
+      // Check model info
+      const modelInfo = await apiFetchOptional('/model-info');
+      if (!cancelled) {
+        setModelReady(modelInfo ? 'ready' : 'unavailable');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const statusLabel = modelReady === 'ready' ? 'Model ready' : modelReady === 'unavailable' ? 'Model unavailable' : 'Checking…';
+  const statusColor = modelReady === 'ready' ? 'text-teal' : modelReady === 'unavailable' ? 'text-rose-400' : 'text-muted';
+  const dotColor = modelReady === 'ready' ? 'bg-teal' : modelReady === 'unavailable' ? 'bg-rose-500' : 'bg-amber-500';
 
   return (
     <header className="sticky top-0 z-30 bg-surface/90 backdrop-blur-md border-b border-border">
@@ -51,9 +74,9 @@ export default function Header({ onMenu }) {
             </div>
           )}
           <div className="h-4 w-px border" />
-          <div className="flex items-center gap-2 text-[10px] font-mono text-muted bg-surface-soft px-2.5 py-1 rounded-full border border-border">
-            <span className="w-1.5 h-1.5 rounded-full bg-success shadow-sm" />
-            <span>Model ready · v0.2.0-demo</span>
+          <div className="flex items-center gap-2 text-[10px] font-mono bg-surface-soft px-2.5 py-1 rounded-full border border-border">
+            <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shadow-sm`} />
+            <span className={statusColor}>{statusLabel} · v0.2.0-demo</span>
           </div>
         </div>
       </div>

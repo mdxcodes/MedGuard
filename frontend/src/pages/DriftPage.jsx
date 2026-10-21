@@ -16,7 +16,7 @@ export default function DriftPage() {
           <div className="rounded-lg border border-border bg-surface p-4">
             <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">Reference</div>
             <div className="text-lg font-extrabold text-primary">Training split</div>
-            <div className="text-[10px] text-muted mt-1 font-mono">MIMIC-IV-ED demo</div>
+            <div className="text-[10px] text-muted mt-1 font-mono">Triagegeist synthetic</div>
           </div>
           <div className="rounded-lg border border-border bg-surface p-4">
             <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-1">Comparison</div>
@@ -40,7 +40,7 @@ export default function DriftPage() {
           <li><strong className="text-primary">PSI / KS statistics</strong> compare feature distributions between reference and comparison sets.</li>
           <li><strong className="text-primary">Missingness shifts</strong> highlight data-collection differences, not model issues.</li>
           <li>Small sample sizes reduce statistical power — treat any drift signal as a hypothesis to investigate, not a confirmed finding.</li>
-          <li>Never combine synthetic benchmark results with empirical MIMIC results into a single drift score.</li>
+          <li>Never combine synthetic benchmark results with empirical results into a single drift score.</li>
         </ul>
       </SectionCard>
     </div>

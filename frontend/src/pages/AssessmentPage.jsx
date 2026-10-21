@@ -3,23 +3,28 @@ import { ArrowRight, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
 import AssessmentForm from '../components/AssessmentForm';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { PageShell } from '../components/ui/states';
+import { apiFetch } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
 
 export default function AssessmentPage() {
+  const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   const handleSubmit = async (payload) => {
     setSubmitting(true); setError(null);
     try {
-      const r = await fetch('/api/predict', {
+      const result = await apiFetch('/api/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const body = await r.json();
-      if (!r.ok && !body.error) throw new Error('Unexpected response');
-      if (body.error) { setError(body.error.detail || body.error); setSubmitting(false); return; }
-      window.location.href = '/prediction';
+      if (!result.ok) {
+        setError(result.error?.message || 'Request failed');
+        setSubmitting(false);
+        return;
+      }
+      navigate('/prediction', { state: { payload, result: result.data } });
     } catch (e) {
       setError('Connection failed — ensure the FastAPI backend is running on port 8000.');
     } finally { setSubmitting(false); }

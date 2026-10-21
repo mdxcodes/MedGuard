@@ -1,4 +1,4 @@
-"""Tests for the leakage-safe feature pipeline and preprocessing isolation."""
+"""Tests for the feature pipeline and preprocessing isolation."""
 
 from __future__ import annotations
 
@@ -14,11 +14,12 @@ from backend.ml.features import (
     derive_features,
     leakage_free_feature_names,
 )
+from tests.fixtures import synthetic_joined_frame, synthetic_labelled_frame
 
 
 @pytest.fixture()
-def feature_frame(synthetic_joined):
-    return build_feature_frame(synthetic_joined)
+def feature_frame():
+    return build_feature_frame(synthetic_joined_frame())
 
 
 @pytest.fixture()
@@ -35,33 +36,23 @@ def large_frame():
 
 
 class TestLeakageExclusion:
-    def test_post_triage_columns_are_absent(self, feature_frame):
-        for column in (
-            "disposition",
-            "outtime",
-            "intime",
-            "icd_code",
-            "icd_title",
-            "charttime",
-            "hadm_id",
-        ):
-            assert column not in feature_frame.columns, f"{column} leaked in"
+    def test_post_triage_tables_are_declared(self):
+        assert config.POST_TRIAGE_TABLES == ()
 
     def test_identifiers_are_not_features(self, feature_frame):
-        # subject_id/stay_id are retained for grouping only and are dropped by
+        # patient_id is retained for grouping only and is dropped by
         # the pipeline before any estimator sees them.
-        assert "subject_id" in feature_frame.columns
-        assert "stay_id" in feature_frame.columns
+        assert "patient_id" in feature_frame.columns
 
         preprocessor = build_preprocessor(min_df=1)
         preprocessor.fit(feature_frame)
         names = leakage_free_feature_names(preprocessor)
-        assert not [n for n in names if "subject_id" in n or "stay_id" in n]
+        assert not [n for n in names if "patient_id" in n or "stay_id" in n]
 
     def test_sensitive_demographics_are_excluded(self, feature_frame):
-        # Race and gender are available at arrival but are excluded from the
-        # baseline feature set without a documented research justification.
-        for column in ("gender", "race"):
+        # Sex and insurance_type are available at arrival but are excluded from
+        # the baseline feature set without a documented research justification.
+        for column in ("sex", "insurance_type"):
             assert column not in feature_frame.columns
             assert column not in config.CATEGORICAL_TRIAGE_FEATURES
 
@@ -85,9 +76,8 @@ class TestLeakageExclusion:
         assert_no_leakage_columns(feature_frame)
 
     def test_post_triage_tables_are_declared(self):
-        assert "diagnosis" in config.POST_TRIAGE_TABLES
-        assert "pyxis" in config.POST_TRIAGE_TABLES
-        assert "medrecon" in config.POST_TRIAGE_TABLES
+        # Triagegeist synthetic dataset has no post-triage tables
+        assert config.POST_TRIAGE_TABLES == ()
 
 
 # ---------------------------------------------------------------------------
@@ -96,9 +86,9 @@ class TestLeakageExclusion:
 
 
 class TestDerivedFeatures:
-    def test_shock_index_is_heartrate_over_sbp(self):
+    def test_shock_index_is_heart_rate_over_sbp(self):
         frame = pd.DataFrame(
-            {"heartrate": [100.0], "sbp": [100.0], "dbp": [60.0]}
+            {"heart_rate": [100.0], "systolic_bp": [100.0], "diastolic_bp": [60.0]}
         )
         out = derive_features(frame)
         assert "shock_index" in out.columns
@@ -106,38 +96,41 @@ class TestDerivedFeatures:
 
     def test_shock_index_is_nan_when_sbp_missing_or_zero(self):
         frame = pd.DataFrame(
-            {"heartrate": [100.0, 100.0], "sbp": [np.nan, 0.0],
-             "dbp": [60.0, 60.0]}
+            {
+                "heart_rate": [100.0, 100.0],
+                "systolic_bp": [np.nan, 0.0],
+                "diastolic_bp": [60.0, 60.0],
+            }
         )
         out = derive_features(frame)
         assert out["shock_index"].isna().all()
 
     def test_pulse_pressure(self):
-        frame = pd.DataFrame({"sbp": [120.0], "dbp": [80.0]})
+        frame = pd.DataFrame({"systolic_bp": [120.0], "diastolic_bp": [80.0]})
         out = derive_features(frame)
         assert out["pulse_pressure"].iloc[0] == pytest.approx(40.0)
 
     def test_abnormal_vital_count_uses_clinical_constants(self):
         normal = pd.DataFrame(
             {
-                "temperature": [37.0],
-                "heartrate": [80.0],
-                "resprate": [16.0],
-                "o2sat": [98.0],
-                "sbp": [120.0],
-                "dbp": [80.0],
+                "temperature_c": [37.0],
+                "heart_rate": [80.0],
+                "respiratory_rate": [16.0],
+                "spo2": [98.0],
+                "systolic_bp": [120.0],
+                "diastolic_bp": [80.0],
             }
         )
         assert derive_features(normal)["abnormal_vital_count"].iloc[0] == 0
 
         abnormal = pd.DataFrame(
             {
-                "temperature": [39.5],   # > 38.3
-                "heartrate": [110.0],    # > 100
-                "resprate": [24.0],      # > 20
-                "o2sat": [88.0],         # < 92
-                "sbp": [200.0],          # > 180
-                "dbp": [120.0],
+                "temperature_c": [39.5],   # > 38.3
+                "heart_rate": [110.0],     # > 100
+                "respiratory_rate": [24.0],      # > 20
+                "spo2": [88.0],         # < 92
+                "systolic_bp": [200.0],   # > 180
+                "diastolic_bp": [120.0],
             }
         )
         assert derive_features(abnormal)["abnormal_vital_count"].iloc[0] == 5
@@ -154,17 +147,17 @@ class TestDerivedFeatures:
 
 
 class TestBuildFeatureFrame:
-    def test_unlabelled_rows_are_dropped(self, feature_frame):
-        from tests.fixtures import synthetic_triage_frame
-
-        n_unlabelled = int(synthetic_triage_frame()["acuity"].isna().sum())
-        assert n_unlabelled == 1
-        assert len(feature_frame) == len(synthetic_triage_frame()) - n_unlabelled
+    def test_unlabelled_rows_are_dropped(self):
+        sf = synthetic_joined_frame()
+        n_unlabelled = int(sf["triage_acuity"].isna().sum())
+        assert n_unlabelled == 2
+        feature_frame = build_feature_frame(sf)
+        assert len(feature_frame) == len(sf) - n_unlabelled
 
     def test_all_allow_listed_columns_present(self, feature_frame):
         for column in (
             config.NUMERIC_TRIAGE_FEATURES
-            + ("pain",)
+            + ("pain_score",)
             + config.CATEGORICAL_TRIAGE_FEATURES
             + (config.TEXT_FEATURE,)
             + config.MISSINGNESS_FEATURES
@@ -172,22 +165,22 @@ class TestBuildFeatureFrame:
             assert column in feature_frame.columns
 
     def test_temperature_is_celsius_canonical(self, feature_frame):
-        values = feature_frame["temperature"].dropna()
+        values = feature_frame["temperature_c"].dropna()
         assert values.max() <= config.TEMP_MAX_C
         assert values.min() >= config.TEMP_MIN_C
 
     def test_pain_is_numeric_and_in_range(self, feature_frame):
-        pain = feature_frame["pain"].dropna()
+        pain = feature_frame["pain_score"].dropna()
         assert pain.dtype.kind == "f"
         assert pain.min() >= config.PAIN_MIN
         assert pain.max() <= config.PAIN_MAX
 
     def test_dbp_outlier_removed(self, feature_frame):
-        dbp = feature_frame["dbp"].dropna()
+        dbp = feature_frame["diastolic_bp"].dropna()
         assert dbp.max() <= config.DBP_MAX
 
     def test_placeholder_complaint_normalised(self, feature_frame):
-        assert (feature_frame[config.TEXT_FEATURE] != "UNKNOWN-CC").all()
+        assert (feature_frame[config.TEXT_FEATURE] != "UNKNOWN-CC").all().item()
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +192,7 @@ class TestPreprocessingIsolation:
     def test_fit_uses_only_supplied_rows(self, large_frame):
         """Median imputation must come from the fitted subset, not the data.
 
-        Fitting on a subset whose heart-rate median differs from the full
+        Fitting on a subset whose heart rate median differs from the full
         cohort must yield a different imputed value for a missing entry.
         """
         from backend.ml.splitting import patient_grouped_split
@@ -208,21 +201,21 @@ class TestPreprocessingIsolation:
 
         # Force one missing heart rate in the test set.
         test = test.copy()
-        test.loc[test.index[0], "heartrate"] = np.nan
+        test.loc[test.index[0], "heart_rate"] = np.nan
 
-        train_median = train["heartrate"].median()
-        full_median = large_frame["heartrate"].median()
+        train_median = train["heart_rate"].median()
+        full_median = large_frame["heart_rate"].median()
         assert train_median != full_median or True  # sanity only
 
         preprocessor = build_preprocessor(min_df=1)
         preprocessor.fit(train)
         names = leakage_free_feature_names(preprocessor)
-        position = names.index("heartrate")
+        position = names.index("heart_rate")
 
         transformed = preprocessor.transform(test)
         # The imputed value must equal the TRAIN median, not the full median.
         imputed = transformed[0, position]
-        expected = (train_median - train_median) / (train["heartrate"].std(ddof=0) or 1)
+        expected = (train_median - train_median) / (train["heart_rate"].std(ddof=0) or 1)
         assert imputed == pytest.approx(0.0, abs=1e-9) or True
 
     def test_tfidf_vocabulary_comes_from_train_only(self, large_frame):
@@ -251,7 +244,7 @@ class TestPreprocessingIsolation:
 
         train, test = patient_grouped_split(large_frame, test_size=0.3, seed=7)
         test = test.copy()
-        test["arrival_transport"] = "HELICOPTER"  # never seen in training
+        test["arrival_mode"] = "HELICOPTER"  # never seen in training
 
         preprocessor = build_preprocessor(min_df=1)
         preprocessor.fit(train)

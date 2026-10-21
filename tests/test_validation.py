@@ -7,8 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backend.ml import config, validation
-from backend.ml.validation import DataQualityError
+from backend.ml import config
+from backend.ml.validation import DataQualityError, clean_triage_frame
+from tests.fixtures import synthetic_labelled_frame
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ class TestTemperatureUnits:
         # 212 F is boiling; the conversion must not be applied blindly.
         raw = pd.Series([212.0])
         _, _ = validation.normalize_temperature(raw)
-        assert config.TEMPERATURE_UNIT if hasattr(config, "TEMPERATURE_UNIT") else True
+        assert config.TEMPERATURE_UNIT == "celsius"
 
 
 # ---------------------------------------------------------------------------
@@ -96,8 +97,8 @@ class TestBloodPressure:
         dbp = pd.Series([76.0, 85.0])
         sbp_clean, dbp_clean, counts = validation.validate_blood_pressure(sbp, dbp)
         assert not sbp_clean.isna().any() and not dbp_clean.isna().any()
-        assert counts["dbp_out_of_range"] == 0
         assert counts["sbp_out_of_range"] == 0
+        assert counts["dbp_out_of_range"] == 0
 
     def test_out_of_range_systolic_is_rejected(self):
         sbp = pd.Series([400.0])
@@ -192,11 +193,13 @@ class TestChiefComplaint:
         result, _ = validation.normalize_chiefcomplaint(
             pd.Series(["   shortness   of  BreaTh "])
         )
-        assert result.iloc[0] == "SHORTNESS OF BREATH"
+        assert result.iloc[0] == "shortness of breath"
 
     def test_real_complaint_is_preserved(self):
-        result, counts = validation.normalize_chiefcomplaint(pd.Series(["CHEST PAIN"]))
-        assert result.iloc[0] == "CHEST PAIN"
+        result, counts = validation.normalize_chiefcomplaint(
+            pd.Series(["CHEST PAIN"])
+        )
+        assert result.iloc[0] == "chest pain"
         assert counts["chiefcomplaint_placeholder"] == 0
 
     def test_empty_becomes_unknown(self):
@@ -209,9 +212,9 @@ class TestChiefComplaint:
     def test_no_free_text_is_returned_in_counts(self):
         # Privacy: the returned counts must not contain complaint text.
         result, counts = validation.normalize_chiefcomplaint(
-            pd.Series(["SECRET PATIENT COMPLAINT"])
+            pd.Series(["CHEST PAIN"])
         )
-        assert "SECRET PATIENT COMPLAINT" not in str(counts)
+        assert "CHEST PAIN" not in str(counts)
 
 
 # ---------------------------------------------------------------------------
@@ -221,10 +224,10 @@ class TestChiefComplaint:
 
 class TestTargetValidation:
     def _frame(self, acuity_values):
-        from tests.fixtures import synthetic_joined_frame
+        from tests.fixtures import synthetic_labelled_frame
 
-        frame = synthetic_joined_frame().copy()
-        frame["acuity"] = acuity_values
+        frame = synthetic_labelled_frame().copy()
+        frame[config.TARGET_COLUMN] = acuity_values
         return frame
 
     def test_missing_labels_are_dropped_not_imputed(self):
@@ -232,7 +235,7 @@ class TestTargetValidation:
         kept, counts = validation.validate_target(frame)
         assert len(kept) == len(frame) - 1
         assert counts["rows_dropped_missing_target"] == 1
-        assert kept["acuity"].notna().all()
+        assert kept[config.TARGET_COLUMN].notna().all()
 
     def test_out_of_range_label_raises(self):
         frame = self._frame([6.0] + [2.0] * 14)
@@ -247,7 +250,7 @@ class TestTargetValidation:
     def test_all_five_levels_are_accepted(self):
         frame = self._frame([1.0, 2.0, 3.0, 4.0, 5.0] + [2.0] * 10)
         kept, counts = validation.validate_target(frame)
-        assert sorted(kept["acuity"].unique()) == [1.0, 2.0, 3.0, 4.0, 5.0]
+        assert sorted(kept[config.TARGET_COLUMN].unique()) == [1.0, 2.0, 3.0, 4.0, 5.0]
 
     def test_labels_are_not_collapsed(self):
         # The original five levels must survive untouched.
@@ -263,12 +266,14 @@ class TestTargetValidation:
 
 class TestMissingnessIndicators:
     def test_indicator_is_added_for_each_column(self):
-        frame = pd.DataFrame({"temperature": [98.6, None], "heartrate": [80, None]})
-        result = validation.add_missingness_indicators(frame, ("temperature", "heartrate"))
-        assert list(result["temperature_missing"]) == [0, 1]
-        assert list(result["heartrate_missing"]) == [0, 1]
+        frame = pd.DataFrame({"temperature_c": [98.6, None], "heart_rate": [80, None]})
+        result = validation.add_missingness_indicators(
+            frame, ("temperature_c", "heart_rate")
+        )
+        assert list(result["temperature_c_missing"]) == [0, 1]
+        assert list(result["heart_rate_missing"]) == [0, 1]
 
     def test_indicator_is_binary(self):
-        frame = pd.DataFrame({"pain": [1.0, None, None, 3.0]})
-        result = validation.add_missingness_indicators(frame, ("pain",))
-        assert set(result["pain_missing"].unique()) <= {0, 1}
+        frame = pd.DataFrame({"pain_score": [1.0, None, None, 3.0]})
+        result = validation.add_missingness_indicators(frame, ("pain_score",))
+        assert set(result["pain_score_missing"].unique()) <= {0, 1}

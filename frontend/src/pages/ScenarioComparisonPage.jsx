@@ -3,9 +3,8 @@ import { GitCompare, AlertCircle, CheckCircle2, RefreshCcw } from 'lucide-react'
 import AssessmentForm from '../components/AssessmentForm';
 import PredictionResults from '../components/PredictionResults';
 import DisclaimerBanner from '../components/DisclaimerBanner';
+import { apiFetch } from '../lib/api';
 import { PageShell, SectionCard } from '../components/ui/states';
-
-const INITIAL = { temperature: '', heartrate: '', resprate: '', o2sat: '', sbp: '', dbp: '', pain: '', arrival_transport: '', chiefcomplaint: '' };
 
 function ComparisonPanel({ title, onSubmit, result, isSubmitting, error, onClear, payload }) {
   return (
@@ -106,12 +105,15 @@ export default function ScenarioComparisonPage() {
   const submitScenario = async (payload, setLoadingFn, setResultFn, setErrorFn) => {
     setLoadingFn(true); setErrorFn(null);
     try {
-      const r = await fetch('/api/predict', {
+      const result = await apiFetch('/api/predict', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
-      const body = await r.json();
-      if (body.error) { setErrorFn(body.error.detail || body.error); setResultFn(null); return; }
-      setResultFn(body);
+      if (!result.ok) {
+        setErrorFn(result.error?.message || 'Request failed');
+        setResultFn(null);
+        return;
+      }
+      setResultFn(result.data);
     } catch (e) {
       setErrorFn('Connection failed — ensure the FastAPI backend is running on port 8000.');
       setResultFn(null);

@@ -1,4 +1,4 @@
-"""Data-quality validation and cleaning rules for the MedGuard triage cohort.
+"""Data-quality validation and cleaning rules for MedGuard triage data.
 
 Every rule in this module is explicit, counted and reversible-in-audit: each
 cleaning step records *how many* values it changed and *why*, so the effect
@@ -19,7 +19,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from . import config
+from backend.ml import config
+from backend.ml.triagegeist_schema import (
+    CATEGORICAL_FEATURE_COLUMNS,
+    NUMERIC_FEATURE_COLUMNS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +72,7 @@ def validate_target(frame: pd.DataFrame) -> tuple[pd.DataFrame, ChangeCounts]:
 
     Rules
     -----
-    * ``acuity`` must lie in the original five-level ESI set ``{1,2,3,4,5}``.
+    * ``triage_acuity`` must lie in the original five-level ESI set ``{1,2,3,4,5}``.
       Out-of-range values are rejected as a hard error (an unexpected label
       means the dataset version changed).
     * Rows with a missing acuity label are **excluded** from supervised
@@ -103,7 +107,7 @@ def validate_target(frame: pd.DataFrame) -> tuple[pd.DataFrame, ChangeCounts]:
 def normalize_temperature(raw: pd.Series) -> tuple[pd.Series, ChangeCounts]:
     """Normalise a mixed Celsius/Fahrenheit column to degrees Celsius.
 
-    The demo package records temperature in *both* units within a single
+    The dataset records temperature in *both* units within a single
     column. A blanket conversion would corrupt the already-Celsius values, so
     the unit is inferred from physiological plausibility instead:
 
@@ -158,266 +162,306 @@ def normalize_temperature(raw: pd.Series) -> tuple[pd.Series, ChangeCounts]:
 def validate_blood_pressure(
     sbp: pd.Series, dbp: pd.Series
 ) -> tuple[pd.Series, pd.Series, ChangeCounts]:
-    """Validate systolic and diastolic blood pressure.
+    """Validate and clean systolic / diastolic blood pressure.
 
-    Out-of-envelope values (e.g. the audited 879 mmHg diastolic entry) are set
-    to missing and counted. ``dbp > sbp`` is physiologically implausible and
-    is reported as a separate suspicion count, but both values are retained
-    so the row stays usable for the other features.
+    Rules
+    -----
+    * Both must lie within the audited physiological envelope.
+    * SBP must be >= DBP.
+    * Out-of-envelope or inconsistent values are set to missing, never clipped.
     """
     counts = _new_counts()
-    sbp_n = _as_numeric(sbp)
-    dbp_n = _as_numeric(dbp)
+    sbp_num = _as_numeric(sbp)
+    dbp_num = _as_numeric(dbp)
 
-    sbp_bad = sbp_n.notna() & (
-        (sbp_n < config.SBP_MIN) | (sbp_n > config.SBP_MAX)
+    sbp_clean = sbp_num.copy()
+    dbp_clean = dbp_num.copy()
+
+    # Range checks
+    sbp_out = sbp_num.notna() & (
+        (sbp_num < config.SBP_MIN) | (sbp_num > config.SBP_MAX)
     )
-    counts["sbp_out_of_range"] = int(sbp_bad.sum())
-    sbp_n.loc[sbp_bad] = np.nan
-
-    dbp_bad = dbp_n.notna() & (
-        (dbp_n < config.DBP_MIN) | (dbp_n > config.DBP_MAX)
+    dbp_out = dbp_num.notna() & (
+        (dbp_num < config.DBP_MIN) | (dbp_num > config.DBP_MAX)
     )
-    counts["dbp_out_of_range"] = int(dbp_bad.sum())
-    dbp_n.loc[dbp_bad] = np.nan
 
-    contradictory = (
-        dbp_n.notna() & sbp_n.notna() & (dbp_n > sbp_n)
+    sbp_clean.loc[sbp_out] = np.nan
+    dbp_clean.loc[dbp_out] = np.nan
+    counts["sbp_out_of_range"] = int(sbp_out.sum())
+    counts["dbp_out_of_range"] = int(dbp_out.sum())
+
+    # SBP >= DBP consistency
+    inconsistent = (
+        sbp_clean.notna()
+        & dbp_clean.notna()
+        & (sbp_clean < dbp_clean)
     )
-    counts["dbp_greater_than_sbp"] = int(contradictory.sum())
+    sbp_clean.loc[inconsistent] = np.nan
+    dbp_clean.loc[inconsistent] = np.nan
+    counts["dbp_greater_than_sbp"] = int(inconsistent.sum())
 
-    if counts["dbp_out_of_range"]:
-        logger.warning(
-            "%d diastolic value(s) outside [%s, %s] mmHg were set to missing.",
-            counts["dbp_out_of_range"], config.DBP_MIN, config.DBP_MAX,
-        )
-    return sbp_n, dbp_n, counts
+    return sbp_clean, dbp_clean, counts
 
 
 # ---------------------------------------------------------------------------
-# Pain score parsing
+# Pain parsing
 # ---------------------------------------------------------------------------
-
-
-_WHITESPACE = re.compile(r"\s+")
 
 
 def parse_pain(raw: pd.Series) -> tuple[pd.Series, ChangeCounts]:
-    """Parse the pain column into a numeric 0-10 score.
+    """Parse pain scores, mapping sentinel tokens to missing.
 
-    The column is stored as text and mixes three kinds of entry:
+    Accepts numeric values on the 0-10 scale. Sentinel strings such as
+    ``UA``, ``unable`` etc. become missing with a missingness indicator.
 
-    1. Numeric scores on a 0-10 scale (kept).
-    2. Recognised *unassessable* sentinels such as ``UA``, ``UTA``,
-       ``unable``. These become missing values with an
-       ``unassessable`` count — a distinct meaning from a plain gap, because
-       a nurse could not assess the patient at all.
-    3. Anything else (``13``, ``Critical``, ``o``) is invalid: out-of-range
-       numerics and unrecognised tokens both become missing and are counted
-       separately for auditing.
+    Returns
+    -------
+    (clean_series, counts)
     """
     counts = _new_counts()
-    text = raw.astype("string").str.strip().str.lower()
+    numeric = _as_numeric(raw)
+    result = numeric.copy()
 
-    unassessable = text.isin(list(config.PAIN_UNASSESSABLE_TOKENS)) & text.notna()
-    counts["pain_unassessable"] = int(unassessable.sum())
-
-    numeric = pd.to_numeric(text, errors="coerce")
-
-    unparseable = numeric.isna() & text.notna() & ~unassessable
+    unparseable = raw.notna() & numeric.isna()
     counts["pain_unparseable"] = int(unparseable.sum())
 
-    out_of_range = numeric.notna() & (
-        (numeric < config.PAIN_MIN) | (numeric > config.PAIN_MAX)
-    )
+    # Check sentinel tokens explicitly mentioned in the audit.
+    # Only consider non-null values -- None/NaN must stay NaN.
+    sentinel_tokens = {
+        "ua",
+        "uta",
+        "unable",
+        "unable to assess",
+        "unable to answer",
+        "n/a",
+        "na",
+        "unknown",
+        "none",
+        "not assessed",
+        "",
+    }
+    raw_str = raw.astype(str).str.strip().str.lower()
+    sentinel_mask = raw.notna() & raw_str.isin(sentinel_tokens)
+    counts["pain_unassessable"] = int(sentinel_mask.sum())
+
+    out_of_range = numeric.notna() & ((numeric < 0) | (numeric > 10))
     counts["pain_out_of_range"] = int(out_of_range.sum())
 
-    result = numeric.where(~out_of_range, np.nan)
-    result = result.astype("float64")
-
-    logger.info(
-        "Pain parsing: %d unassessable, %d unparseable, %d out-of-range -> "
-        "missing; %d usable scores.",
-        counts["pain_unassessable"],
-        counts["pain_unparseable"],
-        counts["pain_out_of_range"],
-        int(result.notna().sum()),
-    )
+    result.loc[unparseable | sentinel_mask | out_of_range] = np.nan
     return result, counts
 
 
 # ---------------------------------------------------------------------------
-# Chief-complaint normalisation
+# Chief complaint normalization
 # ---------------------------------------------------------------------------
 
 
-def normalize_chiefcomplaint(raw: pd.Series) -> tuple[pd.Series, ChangeCounts]:
-    """Light-touch normalisation of the chief-complaint free-text field.
+def normalize_chiefcomplaint(
+    raw: pd.Series,
+) -> tuple[pd.Series, ChangeCounts]:
+    """Normalize chief complaint text.
 
-    Normalisation is uppercase + whitespace collapse. Tokenisation and
-    vocabulary building are handled by the scikit-learn text step so that
-    the vocabulary is fitted on training data only.
-
-    Placeholder entries (``UNKNOWN-CC`` and similar) are replaced with the
-    literal ``unknown`` and counted, so the text step sees a single
-    consistent token instead of many placeholder spellings.
-
-    No complaint value is logged.
+    Lowercases, strips whitespace, collapses internal whitespace, and maps
+    placeholder sentinels to ``"unknown"``.
     """
     counts = _new_counts()
-    text = (
-        raw.astype("string")
-        .fillna("")
+    cleaned = (
+        raw.astype(str)
         .str.strip()
-        .str.upper()
-        .str.replace(_WHITESPACE, " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.lower()
     )
 
-    # The config placeholders are stored lowercase; compare case-insensitively.
-    placeholders = {token.upper() for token in config.CHIEFCOMPLAINT_PLACEHOLDERS}
-    is_placeholder = text.isin(list(placeholders))
-    counts["chiefcomplaint_placeholder"] = int(is_placeholder.sum())
+    placeholders = {
+        "unknown",
+        "unk",
+        "not documented",
+        "no complaint",
+        "n/a",
+        "na",
+        "",
+        "chief complaint",
+        "cc",
+        "cc:",
+    }
+    placeholder_mask = cleaned.isin(placeholders)
+    counts["chiefcomplaint_placeholder"] = int(placeholder_mask.sum())
 
-    normalised = text.where(~is_placeholder, "unknown")
-    empty = normalised == ""
-    counts["chiefcomplaint_empty_after_normalisation"] = int(empty.sum())
-    normalised = normalised.where(~empty, "unknown")
-    return normalised.astype("object"), counts
+    empty_after = placeholder_mask | cleaned.eq("")
+    counts["chiefcomplaint_empty_after_normalisation"] = int(empty_after.sum())
+
+    result = cleaned.copy()
+    result.loc[placeholder_mask] = "unknown"
+    return result, counts
 
 
 # ---------------------------------------------------------------------------
-# Vitals range validation (no unit conversion)
+# Batch cleaning
 # ---------------------------------------------------------------------------
 
 
-def validate_vitals(
-    frame: pd.DataFrame,
-) -> tuple[pd.DataFrame, ChangeCounts]:
-    """Validate all numeric triage vitals against clinical envelopes.
+def clean_triage_frame(frame: pd.DataFrame) -> tuple[pd.DataFrame, ChangeCounts]:
+    """Run all cleaning steps on a triage frame.
 
-    ``temperature`` is handled by :func:`normalize_temperature` and ``pain``
-    by :func:`parse_pain`; this function covers the remaining vitals.
+    Returns the cleaned frame and aggregated counts.
     """
     counts = _new_counts()
-    cleaned = frame.copy()
 
-    for column, lo, hi in (
-        ("heartrate", config.HEARTRATE_MIN, config.HEARTRATE_MAX),
-        ("resprate", config.RESPRATE_MIN, config.RESPRATE_MAX),
-        ("o2sat", config.O2SAT_MIN, config.O2SAT_MAX),
-    ):
-        if column not in cleaned.columns:
-            continue
-        values = _as_numeric(cleaned[column])
-        bad = values.notna() & ((values < lo) | (values > hi))
-        counts[f"{column}_out_of_range"] = int(bad.sum())
-        if counts[f"{column}_out_of_range"]:
-            logger.warning(
-                "%d %s value(s) outside [%s, %s] were set to missing.",
-                counts[f"{column}_out_of_range"], column, lo, hi,
-            )
-        cleaned[column] = values.where(~bad, np.nan)
+    # Target first -- drop unlabelled rows before anything else
+    frame, tc = validate_target(frame)
+    counts["rows_dropped_missing_target"] = tc["rows_dropped_missing_target"]
 
-    if "sbp" in cleaned.columns and "dbp" in cleaned.columns:
-        sbp, dbp, bp_counts = validate_blood_pressure(
-            cleaned["sbp"], cleaned["dbp"]
-        )
-        cleaned["sbp"], cleaned["dbp"] = sbp, dbp
-        for key, value in bp_counts.items():
-            counts[key] = value
+    # Temperature
+    temp, tc = normalize_temperature(frame["temperature_c"])
+    frame["temperature_c"] = temp
+    counts.update(
+        {
+            "celsius_detected": tc["celsius_detected"],
+            "fahrenheit_converted": tc["fahrenheit_converted"],
+            "temperature_out_of_envelope": tc["temperature_out_of_envelope"],
+            "temperature_unparseable": tc["temperature_unparseable"],
+        }
+    )
 
-    return cleaned, counts
+    # Blood pressure
+    sbp_clean, dbp_clean, bp_counts = validate_blood_pressure(
+        frame["systolic_bp"], frame["diastolic_bp"]
+    )
+    frame["systolic_bp"] = sbp_clean
+    frame["diastolic_bp"] = dbp_clean
+    counts.update(
+        {
+            "sbp_out_of_range": bp_counts["sbp_out_of_range"],
+            "dbp_out_of_range": bp_counts["dbp_out_of_range"],
+            "dbp_greater_than_sbp": bp_counts["dbp_greater_than_sbp"],
+        }
+    )
 
+    # Pain
+    pain_clean, pain_counts = parse_pain(frame["pain_score"])
+    frame["pain_score"] = pain_clean
+    counts.update(
+        {
+            "pain_unassessable": pain_counts["pain_unassessable"],
+            "pain_unparseable": pain_counts["pain_unparseable"],
+            "pain_out_of_range": pain_counts["pain_out_of_range"],
+        }
+    )
 
-# ---------------------------------------------------------------------------
-# Missingness indicators
-# ---------------------------------------------------------------------------
+    # Chief complaint
+    cc_clean, cc_counts = normalize_chiefcomplaint(frame["chief_complaint_system"])
+    frame["chief_complaint_system"] = cc_clean
+    counts.update(
+        {
+            "chiefcomplaint_placeholder": cc_counts["chiefcomplaint_placeholder"],
+            "chiefcomplaint_empty_after_normalisation": cc_counts[
+                "chiefcomplaint_empty_after_normalisation"
+            ],
+        }
+    )
+
+    return frame, counts
 
 
 def add_missingness_indicators(
-    frame: pd.DataFrame, columns: tuple[str, ...] | list[str]
+    frame: pd.DataFrame, columns: list[str] | None = None
 ) -> pd.DataFrame:
-    """Add a ``<column>_missing`` 0/1 indicator for each named column.
+    """Add boolean missingness indicators for the given numeric columns.
 
-    Missingness is informative: an unobtainable pain score or absent vitals
-    is itself correlated with higher acuity. Preserving it as an explicit
-    feature lets the model use that signal without imputing a fabricated
-    measurement.
+    Parameters
+    ----------
+    frame : pd.DataFrame
+        Input frame (modified in place).
+    columns : list[str] | None
+        Columns to add indicators for. Defaults to all numeric feature
+        columns from the Triagegeist schema.
     """
-    out = frame.copy()
-    for column in columns:
-        if column not in out.columns:
-            continue
-        out[f"{column}_missing"] = out[column].isna().astype(int)
-    return out
+    if columns is None:
+        columns = list(config.NUMERIC_TRIAGE_FEATURES)
+    for col in columns:
+        if col in frame.columns:
+            frame[col + "_missing"] = frame[col].isna().astype(int)
+    return frame
 
 
 # ---------------------------------------------------------------------------
-# Quality report
+# Quality report container
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class QualityCheck:
-    """One auditable data-quality check with a machine-readable verdict."""
-
-    name: str
-    status: str  # "PASS" | "WARN" | "FAIL"
-    detail: str
-    severity: str = "info"  # "info" | "warning" | "blocking"
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "name": self.name,
-            "status": self.status,
-            "severity": self.severity,
-            "detail": self.detail,
-        }
-
-
-@dataclass
 class QualityReport:
-    """Aggregated, machine- and human-readable data-quality findings.
+    """Container for data-quality audit results."""
 
-    Contains aggregate counts only: no patient identifiers and no free text.
-    """
-
-    checks: list[QualityCheck] = field(default_factory=list)
-    counts: dict[str, Any] = field(default_factory=dict)
-    row_counts: dict[str, int] = field(default_factory=dict)
-    label_distribution: dict[str, int] = field(default_factory=dict)
-    missing_percent: dict[str, float] = field(default_factory=dict)
-    feature_stats: dict[str, dict[str, float]] = field(default_factory=dict)
+    def __init__(self):
+        self.row_counts: dict[str, int] = {}
+        self.label_distribution: dict[str, int] = {}
+        self.missing_percent: dict[str, float] = {}
+        self.feature_stats: dict[str, dict[str, float]] = {}
+        self.counts: dict[str, int] = {}
+        self.checks: list[dict[str, Any]] = []
 
     def add(
-        self, name: str, status: str, detail: str, severity: str = "info"
+        self,
+        name: str,
+        status: str,
+        detail: str,
+        severity: str = "info",
     ) -> None:
         self.checks.append(
-            QualityCheck(name=name, status=status, detail=detail, severity=severity)
+            {
+                "name": name,
+                "status": status,
+                "detail": detail,
+                "severity": severity,
+            }
         )
-
-    @property
-    def failed(self) -> list[QualityCheck]:
-        return [c for c in self.checks if c.status == "FAIL"]
-
-    @property
-    def warnings(self) -> list[QualityCheck]:
-        return [c for c in self.checks if c.status == "WARN"]
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "row_counts": self.row_counts,
             "label_distribution": self.label_distribution,
-            "missing_percent": {k: round(v, 2) for k, v in self.missing_percent.items()},
-            "feature_stats": {
-                k: {kk: round(vv, 3) for kk, vv in v.items()}
-                for k, v in self.feature_stats.items()
-            },
+            "missing_percent": self.missing_percent,
+            "feature_stats": self.feature_stats,
             "counts": self.counts,
-            "checks": [c.to_dict() for c in self.checks],
-            "summary": {
-                "total_checks": len(self.checks),
-                "failed": len(self.failed),
-                "warnings": len(self.warnings),
-            },
+            "checks": self.checks,
         }
+
+
+# ---------------------------------------------------------------------------
+# Vitals validation
+# ---------------------------------------------------------------------------
+
+
+def validate_vitals(frame: pd.DataFrame) -> tuple[pd.DataFrame, ChangeCounts]:
+    """Validate vital signs against clinical envelopes.
+
+    Applies range checks to heart_rate, respiratory_rate, temperature_c,
+    spo2, systolic_bp, diastolic_bp, pain_score. Out-of-envelope values
+    are set to missing and counted.
+    """
+    counts = _new_counts()
+    for f_name in config.NUMERIC_TRIAGE_FEATURES:
+        if f_name not in frame.columns:
+            continue
+        col = frame[f_name]
+        if f_name == "heart_rate":
+            out = col.notna() & ((col < 20) | (col > 220))
+        elif f_name == "respiratory_rate":
+            out = col.notna() & ((col < 4) | (col > 60))
+        elif f_name == "temperature_c":
+            out = col.notna() & ((col < 30.0) | (col > 42.0))
+        elif f_name == "spo2":
+            out = col.notna() & ((col < 50) | (col > 100))
+        elif f_name == "systolic_bp":
+            out = col.notna() & ((col < 50) | (col > 250))
+        elif f_name == "diastolic_bp":
+            out = col.notna() & ((col < 30) | (col > 150))
+        elif f_name == "pain_score":
+            out = col.notna() & ((col < 0) | (col > 10))
+        elif f_name == "age":
+            out = col.notna() & ((col < 0) | (col > 120))
+        else:
+            out = pd.Series(False, index=frame.index)
+        frame.loc[out, f_name] = np.nan
+        counts[f"{f_name}_out_of_range"] = int(out.sum())
+    return frame, counts

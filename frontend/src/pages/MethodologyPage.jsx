@@ -4,9 +4,9 @@ import DisclaimerBanner from '../components/DisclaimerBanner';
 import { PageShell, SectionCard } from '../components/ui/states';
 
 const STEPS = [
-  { step: '01', title: 'Dataset audit', desc: 'Dataset identity, checksum verification, row counts, target distribution verified against MIMIC-IV-ED v2.2 demo.' },
-  { step: '02', title: 'Cleaning', desc: 'Temperature C/F split · BP envelope validation · pain parsing · chief complaint normalization.' },
-  { step: '03', title: 'Feature pipeline', desc: 'Leakage-safe ColumnTransformer: median imputation, StandardScaler, OneHotEncoder, TF-IDF, missing indicators.' },
+  { step: '01', title: 'Dataset Audit', desc: 'Triagegeist synthetic dataset schema verified, row counts confirmed, target distribution documented.' },
+  { step: '02', title: 'Cleaning', desc: 'Vital sign range validation, blood pressure consistency, pain score validation, categorical normalization.' },
+  { step: '03', title: 'Feature Pipeline', desc: 'Leakage-safe ColumnTransformer: median imputation, StandardScaler, OneHotEncoder, derived features (shock index, pulse pressure, MAP, BMI).' },
   { step: '04', title: 'Split', desc: 'Patient-grouped GroupShuffleSplit and GroupKFold. Zero patient overlap verified by assertion.' },
   { step: '05', title: 'Explain', desc: 'Exact tree-based SHAP via TreeExplainer. Feature names match transformed pipeline output.' },
 ];
@@ -16,11 +16,11 @@ export default function MethodologyPage() {
     <div className="space-y-8">
       <PageShell
         title="Methodology"
-        subtitle="How MedGuard was built — from MIMIC-IV-ED audit through API inference. Every stage uses verified, documented data and reproducible code."
+        subtitle="How MedGuard was built — from Triagegeist synthetic data audit through API inference. Every stage uses verified, documented data and reproducible code."
         breadcrumb="Research · Methodology"
       />
 
-      <SectionCard title="Pipeline stages" badge="Five steps">
+      <SectionCard title="Pipeline Stages" badge="Five Steps">
         <div className="grid sm:grid-cols-5 gap-2">
           {STEPS.map(s => (
             <div key={s.step} className="rounded-xl border border-border bg-surface p-5 hover:border-primary/30 transition">
@@ -32,7 +32,7 @@ export default function MethodologyPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="What SHAP explains — and what it does not" badge="Interpretability">
+      <SectionCard title="What SHAP Explains — And What It Does Not" badge="Interpretability">
         <div className="rounded-xl border border-border bg-surface p-6">
           <p className="text-sm text-secondary leading-relaxed mb-4">
             SHAP (SHapley Additive exPlanations) measures how each transformed feature pushes a prediction toward or away from a given ESI class.
@@ -43,15 +43,13 @@ export default function MethodologyPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Explicit limitations" badge="Documented, not hidden" icon={<AlertTriangle className="w-4 h-4" />}>
+      <SectionCard title="Explicit Limitations" badge="Documented, Not Hidden" icon={<AlertTriangle className="w-4 h-4" />}>
         <ul className="space-y-2 text-sm text-secondary list-disc list-inside leading-relaxed">
           <li><strong>Not clinically validated.</strong> This is an educational demonstration only.</li>
-          <li><strong>No ESI 5 training support.</strong> Zero examples; predictions always 0.0.</li>
-          <li><strong>ESI 4 sparse.</strong> 2 examples; metrics unstable.</li>
-          <li><strong>Small cohort.</strong> 207 visits / 56 patients from a demo subset.</li>
-          <li><strong>No age feature.</strong> MIMIC-IV core patients table unavailable.</li>
+          <li><strong>Synthetic dataset.</strong> Results are from synthetic Triagegeist data; not representative of real patient populations.</li>
+          <li><strong>Small cohort.</strong> 80,000 training visits demonstrates methodology; generalization to real EDs is limited.</li>
+          <li><strong>ESI 5 may be sparse.</strong> If ESI 5 has few labelled examples, per-class metrics are unstable.</li>
           <li><strong>Probabilities not calibrated.</strong> Not suitable for clinical probability estimation.</li>
-          <li><strong>Private data.</strong> MIMIC data is ODbL-licensed; not uploaded or committed.</li>
         </ul>
       </SectionCard>
     </div>

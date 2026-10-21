@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { AlertTriangle, BarChart3, Filter, Search, Info } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { PageShell, SectionCard } from '../components/ui/states';
+import errorData from '../../../reports/evaluation_errors.json';
 
 const ESI_COLORS = {
   1: 'text-rose-600',

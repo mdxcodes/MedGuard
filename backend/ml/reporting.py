@@ -1,7 +1,7 @@
 """Machine- and human-readable data-quality reporting.
 
 The report intentionally contains **aggregate counts only**: no patient
-identifiers, no ``stay_id`` values, and no chief-complaint free text. This
+identifiers, no ``patient_id`` values, and no chief-complaint free text. This
 keeps the committed documentation free of research data while still making
 every cleaning decision auditable.
 """
@@ -17,6 +17,7 @@ from typing import Any
 import pandas as pd
 
 from . import config
+from .triagegeist_schema import CATEGORICAL_FEATURE_COLUMNS, NUMERIC_FEATURE_COLUMNS
 from .validation import QualityReport
 
 logger = logging.getLogger(__name__)
@@ -92,33 +93,33 @@ def build_quality_report(
 
     feature_columns = (
         list(config.NUMERIC_TRIAGE_FEATURES)
-        + ["pain"]
+        + ["pain_score"]
         + list(config.CATEGORICAL_TRIAGE_FEATURES)
     )
     report.missing_percent = _missing_percent(feature_frame, feature_columns)
     report.feature_stats = _feature_stats(
         feature_frame,
         [
-            "temperature",
-            "heartrate",
-            "resprate",
-            "o2sat",
-            "sbp",
-            "dbp",
-            "pain",
+            "temperature_c",
+            "heart_rate",
+            "respiratory_rate",
+            "spo2",
+            "systolic_bp",
+            "diastolic_bp",
+            "pain_score",
             "shock_index",
             "pulse_pressure",
             "abnormal_vital_count",
         ]
         if pipeline is None
         else [
-            "temperature",
-            "heartrate",
-            "resprate",
-            "o2sat",
-            "sbp",
-            "dbp",
-            "pain",
+            "temperature_c",
+            "heart_rate",
+            "respiratory_rate",
+            "spo2",
+            "systolic_bp",
+            "diastolic_bp",
+            "pain_score",
         ],
     )
 
@@ -135,11 +136,11 @@ def build_quality_report(
         severity="blocking" if not checksum_results else "info",
     )
 
-    duplicates = int(joined[config.STAY_ID_COLUMN].duplicated().sum())
+    duplicates = int(joined[config.SUBJECT_ID_COLUMN].duplicated().sum())
     report.add(
-        "duplicate_stay_id",
+        "duplicate_patient_id",
         "PASS" if duplicates == 0 else "FAIL",
-        f"{duplicates} duplicate stay_id value(s) in the joined dataset.",
+        f"{duplicates} duplicate patient_id value(s) in the joined dataset.",
         severity="blocking" if duplicates else "info",
     )
 
@@ -147,8 +148,8 @@ def build_quality_report(
     report.add(
         "one_to_one_join_integrity",
         "PASS" if join_ok else "FAIL",
-        "triage <-> edstays joined one-to-one on stay_id with no row "
-        f"fan-out ({report.row_counts['raw_joined_rows']} rows retained).",
+        f"joined set kept {len(joined)} of {report.row_counts['raw_joined_rows']} "
+        f"rows.",
         severity="blocking" if not join_ok else "info",
     )
 
@@ -215,8 +216,8 @@ def build_quality_report(
         "WARN" if dbp_bad else "PASS",
         (
             f"{dbp_bad} diastolic value(s) outside "
-            f"[{config.DBP_MIN}, {config.DBP_MAX}] mmHg (including the audited "
-            "879 mmHg entry) were set to missing rather than clipped."
+            f"[{config.DBP_MIN}, {config.DBP_MAX}] mmHg were set to missing "
+            "rather than clipped."
         )
         if dbp_bad
         else "No implausible diastolic values found.",
@@ -255,18 +256,16 @@ def build_quality_report(
     report.add(
         "age_availability",
         "FAIL",
-        "No age field exists in this package. The MIMIC-IV core `patients` "
-        "table is required to derive age and was NOT available, so age is "
-        "recorded as an unavailable feature. Age was not fabricated or "
-        "imputed.",
+        "No age field exists in this package. Age was not provided by the "
+        "Triagegeist dataset and was neither fabricated nor imputed.",
         severity="warning",
     )
 
     report.add(
         "leakage_column_exclusion",
         "PASS",
-        "disposition, outtime, and the post-triage tables diagnosis, pyxis, "
-        "medrecon are excluded from features. Post-triage vitalsign "
+        "disposition, ed_los_hours, and the post-triage tables diagnosis, "
+        "pyxis, medrecon are excluded from features. Post-triage vitalsign "
         "measurements are excluded. Verified by an automated assertion.",
     )
 
@@ -303,10 +302,10 @@ def write_json_report(report: QualityReport, path: Path) -> Path:
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "dataset": {
-            "name": "MIMIC-IV-ED",
-            "version": "2.2",
-            "variant": "demo subset",
-            "license": "ODbL (Open Database License)",
+            "name": "Triagegeist",
+            "version": "synthetic",
+            "variant": "training subset",
+            "license": "Non-commercial research (verify locally)",
         },
         "target": {
             "column": config.TARGET_COLUMN,
@@ -340,7 +339,7 @@ def render_markdown(report: QualityReport, payload_extra: dict[str, Any]) -> str
     )
     lines.append("")
     lines.append(
-        "Dataset: **MIMIC-IV-ED v2.2, demo subset** (licensed under ODbL). "
+        "Dataset: **Triagegeist synthetic dataset**. "
         "This report contains aggregate counts only — no patient identifiers "
         "and no free-text complaints."
     )
@@ -394,14 +393,14 @@ def render_markdown(report: QualityReport, payload_extra: dict[str, Any]) -> str
         "sbp_out_of_range",
         "dbp_out_of_range",
         "dbp_greater_than_sbp",
-        "heartrate_out_of_range",
-        "resprate_out_of_range",
-        "o2sat_out_of_range",
+        "heart_rate_out_of_range",
+        "respiratory_rate_out_of_range",
+        "spo2_out_of_range",
         "pain_unassessable",
         "pain_unparseable",
         "pain_out_of_range",
-        "chiefcomplaint_placeholder",
-        "chiefcomplaint_empty_after_normalisation",
+        "chief_complaint_placeholder",
+        "chief_complaint_empty_after_normalisation",
     ):
         if key in report.counts:
             lines.append(f"| `{key}` | {report.counts[key]} |")
@@ -452,12 +451,12 @@ def render_markdown(report: QualityReport, payload_extra: dict[str, Any]) -> str
         "demo subset, not a crash in the pipeline."
     )
     lines.append(
-        "- No age field is available: the MIMIC-IV core `patients` table is "
-        "required and was not supplied. Age was neither fabricated nor imputed."
+        "- No age field is available in the Triagegeist synthetic dataset. Age "
+        "was neither fabricated nor imputed."
     )
     lines.append(
-        "- Post-triage information (`disposition`, `outtime`, ED `diagnosis`, "
-        "`pyxis`, `medrecon`) is excluded from all features."
+        "- Post-triage information (`disposition`, `ed_los_hours`) is excluded "
+        "from all features."
     )
     lines.append(
         "- Preprocessing statistics are fitted on training rows only, inside "

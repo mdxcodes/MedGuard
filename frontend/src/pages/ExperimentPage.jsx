@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Beaker } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
+import { apiFetch, apiFetchOptional } from '../lib/api';
 import { PageShell, SectionCard, LoadingState } from '../components/ui/states';
 
 export default function ExperimentPage() {
@@ -10,24 +11,35 @@ export default function ExperimentPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch('/api/experiments')
-      .then(r => r.ok ? r.json() : [])
-      .then(setExps)
-      .catch(() => setExps([]));
+    let cancelled = false;
+    (async () => {
+      const data = await apiFetchOptional('/api/experiments');
+      if (!cancelled) {
+        setExps(Array.isArray(data) ? data : []);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const run = async () => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch('/api/experiments/run', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
+      const result = await apiFetch('/api/experiments/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
       });
-      if (!r.ok) throw new Error('Experiment rejected');
-      fetch('/api/experiments')
-        .then(r => r.ok ? r.json() : [])
-        .then(setExps);
-    } catch (e) { setError('Experiment run failed — check server logs.'); }
-    finally { setLoading(false); }
+      if (!result.ok) {
+        setError(result.error?.message || 'Experiment rejected');
+        return;
+      }
+      const data = await apiFetchOptional('/api/experiments');
+      setExps(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError('Experiment run failed — check server logs.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,7 +71,7 @@ export default function ExperimentPage() {
           </div>
         </div>
         {error && (
-          <div className="mt-3 rounded-lg border border-error/20 bg-error-bg p-3 text-xs text-error">
+          <div className="mt-3 rounded-xl border border-error/20 bg-error-bg p-3 text-xs text-error">
             {error}
           </div>
         )}
@@ -96,7 +108,7 @@ export default function ExperimentPage() {
                         {e.status}
                       </span>
                     </td>
-                    <td className="py-3 pr-3 text-right font-mono text-secondary">{e.config?.model_name ?? '—'}</td>
+                    <td className="py-3 pr-3 font-mono text-secondary">{e.config?.model_name ?? '—'}</td>
                     <td className="py-3 pr-3 text-right font-mono text-secondary">{new Date(e.started_at ?? 0).toLocaleTimeString()}</td>
                   </tr>
                 ))}

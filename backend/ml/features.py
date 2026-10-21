@@ -1,4 +1,5 @@
-"""Leakage-safe feature engineering and the scikit-learn preprocessing pipeline.
+"""Leakage-safe feature engineering and the scikit-learn preprocessing pipeline
+for the Triagegeist synthetic dataset.
 
 Design contract
 ---------------
@@ -29,7 +30,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
-from . import config
+from backend.ml import config
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +56,10 @@ DERIVED_FEATURES: tuple[str, ...] = (
 def derive_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Add row-wise derived features. No fitted statistics, no leakage.
 
-    * ``shock_index``           = heartrate / systolic blood pressure
-    * ``pulse_pressure``        = systolic - diastolic blood pressure
+    * ``shock_index``           = heart_rate / systolic_bp
+    * ``pulse_pressure``        = systolic_bp - diastolic_bp
     * ``abnormal_vital_count``  = number of vitals outside the clinical
-      envelope in :data:`config.ABNORMAL_VITAL_RULES`
+      envelope in :data:`backend.ml.config.ABNORMAL_VITAL_RULES`
 
     Only the identifiers, target and allow-listed feature columns are carried
     through, so the ColumnTransformer downstream never sees anything else.
@@ -70,8 +71,8 @@ def derive_features(frame: pd.DataFrame) -> pd.DataFrame:
             return pd.Series(np.nan, index=frame.index)
         return pd.to_numeric(frame[name], errors="coerce")
 
-    hr, sbp, dbp = num("heartrate"), num("sbp"), num("dbp")
-    rr, o2, temp = num("resprate"), num("o2sat"), num("temperature")
+    hr, sbp, dbp = num("heart_rate"), num("systolic_bp"), num("diastolic_bp")
+    rr, o2, temp = num("respiratory_rate"), num("spo2"), num("temperature_c")
 
     # Guard division: NaN or sbp <= 0 -> NaN, never a fabricated 0.
     out["shock_index"] = hr / sbp.where(sbp > 0)
@@ -79,11 +80,12 @@ def derive_features(frame: pd.DataFrame) -> pd.DataFrame:
     out["pulse_pressure"] = sbp - dbp
 
     columns = {
-        "heartrate": hr,
-        "resprate": rr,
-        "o2sat": o2,
-        "sbp": sbp,
-        "temperature": temp,
+        "heart_rate": hr,
+        "respiratory_rate": rr,
+        "spo2": o2,
+        "systolic_bp": sbp,
+        "diastolic_bp": dbp,
+        "temperature_c": temp,
     }
     abnormal = pd.Series(0, index=frame.index, dtype="float64")
     for column, direction, threshold in config.ABNORMAL_VITAL_RULES:
@@ -102,7 +104,10 @@ def derive_features(frame: pd.DataFrame) -> pd.DataFrame:
             + config.CATEGORICAL_TRIAGE_FEATURES
             + (config.TEXT_FEATURE,)
             + INDICATOR_FEATURES
-            + (config.SUBJECT_ID_COLUMN, config.STAY_ID_COLUMN, config.TARGET_COLUMN)
+            + (
+                config.SUBJECT_ID_COLUMN,
+                config.TARGET_COLUMN,
+            )
         )
         if c in frame.columns
     ]
@@ -165,7 +170,7 @@ def build_preprocessor(
                       ('cat',      categorical_branch, cat_cols),
                       ('text',     text_branch,     [text_col]),
                       ('flags',    'passthrough',   indicator_cols),
-                  ], remainder='drop'))])
+                    ]))])
 
     Every transformer in the branches is *fitted* (imputer medians, encoder
     categories, TF-IDF vocabulary), so calling ``fit`` on training folds only
@@ -174,12 +179,11 @@ def build_preprocessor(
     Parameters
     ----------
     max_tfidf_features:
-        Upper bound on the TF-IDF vocabulary. The demo subset has 207
-        labelled rows and 168 distinct complaints, so a small capped
-        vocabulary is essential to avoid over-fitting.
+        Upper bound on the TF-IDF vocabulary. The demo subset has 80,000
+        labelled rows, so a small capped vocabulary is essential to avoid
+        over-fitting.
     min_df:
-        Minimum document frequency for a TF-IDF term. ``5`` is appropriate for
-        the real cohort; tests on tiny fixtures pass ``min_df=1``.
+        Minimum document frequency for a TF-IDF term.
     """
     numeric_branch = Pipeline(
         steps=[
@@ -252,10 +256,10 @@ def build_preprocessor(
 def build_feature_frame(joined: pd.DataFrame) -> pd.DataFrame:
     """Turn the joined raw frame into a cleaned, allow-listed feature frame.
 
-    Applies every documented data-quality rule from :mod:`backend.ml.validation`
-    and returns a frame with only the allow-listed feature columns, the
-    missingness indicators, and the identifier/target columns needed for
-    splitting and evaluation.
+    Applies every documented data-quality rule from
+    :mod:`backend.ml.validation` and returns a frame with only the allow-listed
+    feature columns, the missingness indicators, and the identifier/target
+    columns needed for splitting and evaluation.
 
     This function performs **no fitted statistics** (no medians, no
     vocabularies, no category groupings), so it is safe to call on the full
@@ -270,30 +274,28 @@ def build_feature_frame(joined: pd.DataFrame) -> pd.DataFrame:
     frame, target_counts = validation.validate_target(frame)
 
     # --- temperature: normalise mixed C/F, reject implausible values --------
-    frame["temperature"], temp_counts = validation.normalize_temperature(
-        frame["temperature"]
+    frame["temperature_c"], temp_counts = validation.normalize_temperature(
+        frame["temperature_c"]
     )
 
     # --- pain: parse to 0-10, sentinels and out-of-range -> missing ---------
-    frame["pain"], pain_counts = validation.parse_pain(frame["pain"])
+    frame["pain_score"], pain_counts = validation.parse_pain(frame["pain_score"])
 
     # --- remaining vitals: envelope validation -----------------------------
     frame, vitals_counts = validation.validate_vitals(frame)
 
     # --- chief complaint: deterministic normalisation (no fit) --------------
-    frame["chiefcomplaint"], cc_counts = validation.normalize_chiefcomplaint(
-        frame["chiefcomplaint"]
+    frame["chief_complaint_system"], cc_counts = validation.normalize_chiefcomplaint(
+        frame["chief_complaint_system"]
     )
 
     # --- arrival transport: explicit missing category -----------------------
-    frame["arrival_transport"] = frame["arrival_transport"].astype(
-        "string"
-    ).fillna("unknown")
+    frame["arrival_mode"] = frame["arrival_mode"].astype("string").fillna("unknown")
 
     # --- missingness indicators --------------------------------------------
     frame = validation.add_missingness_indicators(
         frame,
-        ("temperature", "heartrate", "resprate", "o2sat", "sbp", "dbp", "pain"),
+        config.NUMERIC_TRIAGE_FEATURES,
     )
 
     counts: dict[str, int] = {}
@@ -304,50 +306,51 @@ def build_feature_frame(joined: pd.DataFrame) -> pd.DataFrame:
 
     kept = (
         list(config.NUMERIC_TRIAGE_FEATURES)
-        + ["pain"]
+        + ["pain_score"]
         + list(config.CATEGORICAL_TRIAGE_FEATURES)
         + [config.TEXT_FEATURE]
         + list(INDICATOR_FEATURES)
-        + [config.SUBJECT_ID_COLUMN, config.STAY_ID_COLUMN, config.TARGET_COLUMN]
+        + [config.SUBJECT_ID_COLUMN, config.TARGET_COLUMN]
     )
     frame = frame[[c for c in kept if c in frame.columns]].copy()
     return frame
 
 
 def assert_no_leakage_columns(frame: pd.DataFrame) -> None:
-    """Assert that no forbidden identifier or leakage column is present.
+    """Assert that no leakage-prone column is present as a feature.
 
-    ``subject_id``, ``stay_id`` and the target column are tolerated because
-    they are required for patient-grouped splitting, duplicate checking and
-    evaluation respectively; the pipeline drops them before any estimator
-    sees them, and :func:`leakage_free_feature_names` verifies that.
+    Leakage-prone columns (disposition, ed_los_hours) must never be used
+    as model inputs because they are determined after triage.
     """
-    tolerated = {
-        config.SUBJECT_ID_COLUMN,
-        config.STAY_ID_COLUMN,
-        config.TARGET_COLUMN,
-    }
-    forbidden = [
-        c
-        for c in config.FORBIDDEN_FEATURE_COLUMNS
-        if c in frame.columns and c not in tolerated
-    ]
-    if forbidden:
+    leakage_cols = [f.name for f in config.LEAKAGE_FIELDS]
+    present = [c for c in leakage_cols if c in frame.columns]
+    if present:
         raise ValueError(
-            "Leakage guard triggered: forbidden column(s) present in the "
-            f"feature frame: {sorted(forbidden)}. Remove them before fitting."
+            f"Leakage-prone columns found in feature frame: {present}. "
+            "These columns contain post-triage outcome information and "
+            "must not be used as model inputs."
         )
 
 
 def leakage_free_feature_names(fitted_preprocessor: Pipeline) -> list[str]:
-    """Feature names the *preprocessor* emits, with identifier guards applied.
+    """Feature names from a fitted ColumnTransformer pipeline.
 
-    Used to confirm the estimator input matrix contains no identifiers. Names
-    are taken from the ``encode`` step because the stateless ``derive`` step
-    (a ``FunctionTransformer``) does not expose feature names.
+    Returns feature names in the order they appear after transformation,
+    suitable for SHAP explanations and model interpretation.
+
+    Parameters
+    ----------
+    fitted_preprocessor : sklearn Pipeline or ColumnTransformer
+        A fitted pipeline with a 'preprocess' step (ColumnTransformer)
+        or a ColumnTransformer directly.
+
+    Returns
+    -------
+    list[str]
+        Feature names in transformed order.
     """
     pre = fitted_preprocessor
-    if "preprocess" in getattr(pre, "named_steps", {}):
+    if hasattr(pre, "named_steps") and "preprocess" in pre.named_steps:
         pre = pre.named_steps["preprocess"]
 
     if "encode" in getattr(pre, "named_steps", {}):

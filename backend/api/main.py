@@ -57,6 +57,10 @@ try:
     from backend.api.triagegeist_endpoint import triagegeist_status
 except Exception:
     triagegeist_status = None
+try:
+    from backend.api.metrics_endpoint import metrics_status
+except Exception:
+    metrics_status = None
 from backend.api.schemas import AssessmentRequest, ModelInfoResponse, PredictResponse
 
 log = logging.getLogger("medguard.api.main")
@@ -161,6 +165,12 @@ def create_app() -> FastAPI:
         if triagegeist_status is None:
             raise HTTPException(status_code=500, detail="Triagegeist endpoint not available")
         return triagegeist_status()
+
+    @app.get("/metrics")
+    def metrics_endpoint():
+        if metrics_status is None:
+            raise HTTPException(status_code=500, detail="Metrics endpoint not available")
+        return metrics_status()
 
     @app.get("/export/report")
     def export_report():

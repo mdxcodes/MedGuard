@@ -4,16 +4,16 @@ Environment variables
 ---------------------
 MEDGUARD_MODEL_PATH
     Absolute path to the saved ``*.joblib`` inference pipeline. Defaults to
-    ``models/triage_model.joblib`` relative to the project root.
+    ``models/triagegeist/triage_model.joblib`` relative to the project root.
 
 MEDGUARD_MANIFEST_PATH
     Absolute path to the saved ``*.manifest.json`` metadata file. Defaults
-    to ``models/triage_model.manifest.json`` relative to the project root.
+    to ``models/triagegeist/triage_model.manifest.json`` relative to the
+    project root.
 
 MEDGUARD_DATA_ROOT
-    Root directory containing the MIMIC-IV-ED demo dataset (e.g.
-    ``mimic-iv-ed-demo-2.2``). Used only by the loader if the artifact is
-    missing or needs validation.
+    Root directory containing the Triagegeist dataset (default:
+    ``triagegeist/`` relative to project root).
 
 MEDGUARD_ALLOW_FOREIGN_ORIGIN
     When set to ``1``, CORS allows requests from any origin. In production
@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -40,11 +39,11 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 ENV: dict[str, str] = {
     "MODEL_PATH": _PROJECT_ROOT
-        / (os.getenv("MEDGUARD_MODEL_PATH", "models/triage_model.joblib")),
+        / (os.getenv("MEDGUARD_MODEL_PATH", "models/triagegeist/triage_model.joblib")),
     "MANIFEST_PATH": _PROJECT_ROOT
-        / (os.getenv("MEDGUARD_MANIFEST_PATH", "models/triage_model.manifest.json")),
+        / (os.getenv("MEDGUARD_MANIFEST_PATH", "models/triagegeist/triage_model.manifest.json")),
     "DATA_ROOT": _PROJECT_ROOT
-        / os.getenv("MEDGUARD_DATA_ROOT", "mimic-iv-ed-demo-2.2"),
+        / os.getenv("MEDGUARD_DATA_ROOT", "triagegeist"),
 }
 
 MODEL_PATH = Path(ENV["MODEL_PATH"])
@@ -56,7 +55,7 @@ ALLOW_FOREIGN_ORIGIN = os.getenv("MEDGUARD_ALLOW_FOREIGN_ORIGIN", "0") == "1"
 
 
 class ModelManifest(BaseModel):
-    """Schema matching ``models/triage_model.manifest.json``."""
+    """Schema matching ``models/triagegeist/triage_model.manifest.json``."""
 
     model_name: str
     model_kind: str
@@ -89,20 +88,18 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
         return model_state["pipeline"], model_state["manifest"], model_state["feature_names"]
 
     import joblib
-    from backend.ml.features import leakage_free_feature_names
-    from backend.ml.data_loading import load_joined_dataset
-    from backend.ml.features import build_feature_frame
-    from backend.ml.run_experiment import run_phase2_experiment
+    from backend.ml.triagegeist_preprocessing import leakage_free_feature_names
+    from backend.ml.triagegeist_training import run_training
 
     if not MODEL_PATH.exists():
         raise RuntimeError(
             f"Model artifact not found at {MODEL_PATH}. "
-            "Re-run `venv/bin/python -m backend.ml.run_experiment` to produce it."
+            "Re-run `venv/bin/python -m backend.ml.triagegeist_training` to produce it."
         )
     if not MANIFEST_PATH.exists():
         raise RuntimeError(
             f"Model manifest not found at {MANIFEST_PATH}. "
-            "Re-run `venv/bin/python -m backend.ml.run_experiment` to produce it."
+            "Re-run `venv/bin/python -m backend.ml.triagegeist_training` to produce it."
         )
 
     import json as _json
@@ -115,11 +112,12 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
     # Sanity-check: a real row must transform without error and produce the
     # expected feature count (so we can compare against manifest expectations).
     try:
-        from backend.ml.data_loading import load_joined_dataset
-        from backend.ml.features import build_feature_frame
+        from backend.ml.triagegeist_loader import load_all
+        from backend.ml.triagegeist_preprocessing import build_feature_frame
 
-        joined = load_joined_dataset()
-        feature_frame = build_feature_frame(joined)
+        data = load_all()
+        train_df_raw = data["train"]
+        feature_frame = build_feature_frame(train_df_raw)
         if len(feature_frame) == 0:
             raise RuntimeError("Model sanity check failed: feature frame is empty.")
         transformed = pipeline.named_steps["preprocess"].transform(feature_frame.head(1))
@@ -133,7 +131,7 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"Model sanity check failed: {exc}") from exc
 
-    from backend.ml.features import leakage_free_feature_names
+    from backend.ml.triagegeist_preprocessing import leakage_free_feature_names
 
     feature_names = leakage_free_feature_names(pipeline)
     model_state["pipeline"] = pipeline

@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import numpy as np
 
-from backend.ml import config
+from backend.ml import config, triagegeist_schema
 
 
 def chi2_approx(o: np.ndarray, e: np.ndarray) -> float:
@@ -40,7 +40,7 @@ def compute_psi(ref: np.ndarray, comp: np.ndarray, bins: int = 5) -> float:
 
 def analyze_drift(ref_df, comp_df, numeric_cols=None) -> Dict[str, Any]:
     if numeric_cols is None:
-        numeric_cols = ['temperature', 'heartrate', 'resprate', 'o2sat', 'sbp', 'dbp', 'pain']
+        numeric_cols = triagegeist_schema.NUMERIC_FEATURE_COLUMNS
     results = {'numeric_psi': {}, 'sample_sizes': {'ref': len(ref_df), 'comp': len(comp_df)}, 'status': 'limited'}
     for c in numeric_cols:
         if c in ref_df and c in comp_df:

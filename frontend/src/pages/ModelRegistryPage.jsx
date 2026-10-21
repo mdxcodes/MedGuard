@@ -1,6 +1,7 @@
 import { Database, ShieldCheck, AlertTriangle } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { useEffect, useState } from 'react';
+import { apiFetchOptional } from '../lib/api';
 import { PageShell, SectionCard, StatMetric, LoadingState } from '../components/ui/states';
 
 export default function ModelRegistryPage() {
@@ -10,21 +11,24 @@ export default function ModelRegistryPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+    (async () => {
       try {
-        const [a, v] = await Promise.all([
-          fetch('/api/models/active').then(r => r.ok ? r.json() : null),
-          fetch('/api/models/versions').then(r => r.ok ? r.json() : null),
+        const [activeRes, versionsRes] = await Promise.all([
+          apiFetchOptional('/api/models/active'),
+          apiFetchOptional('/api/models/versions'),
         ]);
-        setActive(a);
-        setVersions(Array.isArray(v) ? v : [v]);
+        if (!cancelled) {
+          setActive(activeRes?.data ?? null);
+          setVersions(Array.isArray(versionsRes?.data) ? versionsRes.data : []);
+        }
       } catch (e) {
-        setError('Failed to load registry');
+        if (!cancelled) setError('Failed to load registry');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    }
-    load();
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   return (

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { apiFetch } from '../lib/api';
+import { BarChart3 } from 'lucide-react';
 import { AlertTriangle, Info } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { PageShell, SectionCard, StatMetric } from '../components/ui/states';
+import { apiFetch } from '../lib/api';
 
 export default function SyntheticBenchmarkPage() {
   const [status, setStatus] = useState('loading');
@@ -10,20 +11,25 @@ export default function SyntheticBenchmarkPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      try {
-        const tg = await apiFetch('/triagegeist/status');
+      const result = await apiFetch('/triagegeist/status');
+      if (!cancelled) {
+        if (!result.ok) {
+          setError(result.error?.message || 'Failed to load benchmark');
+          setStatus('error');
+          return;
+        }
+        const tg = result.data;
         if (tg?.available) {
           setData(tg);
           setStatus('loaded');
         } else {
           setStatus('unavailable');
         }
-      } catch (e) {
-        setError(String(e?.message ?? e));
-        setStatus('error');
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const profile = data?.profile ?? {};
@@ -35,7 +41,7 @@ export default function SyntheticBenchmarkPage() {
     <div className="space-y-8">
       <PageShell
         title="Synthetic benchmark"
-        subtitle="Research-only benchmark over the synthetic Triagegeist dataset. Results here are separated from the real-data MIMIC-IV-ED baseline and must not be presented as clinically comparable."
+        subtitle="Research-only benchmark over the synthetic Triagegeist dataset. Results here are separated from empirical data and must not be presented as clinically comparable."
         breadcrumb="Advanced Analysis · Synthetic Benchmark"
       />
 
@@ -74,7 +80,7 @@ export default function SyntheticBenchmarkPage() {
               <StatMetric value={profile.reference_dataset ?? '—'} label="Split protocol" subtitle={profile.split_protocol ?? ''} tone="info" />
             </div>
             <div className="mt-3 rounded-lg border border-warning/20 bg-warning-bg/40 p-3 text-[10px] text-warning font-medium">
-              Triagegeist is a synthetic dataset. Its metrics are not comparable to the MIMIC-IV-ED demo baseline and do not establish clinical validity.
+              Triagegeist is a synthetic dataset. Its metrics are not comparable to empirical data and do not establish clinical validity.
             </div>
           </SectionCard>
 
@@ -134,5 +140,3 @@ export default function SyntheticBenchmarkPage() {
 function formatNumber(n) {
   return n == null ? '—' : n.toLocaleString();
 }
-
-import { BarChart3 } from 'lucide-react';

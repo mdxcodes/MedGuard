@@ -15,76 +15,70 @@ from pydantic import BaseModel, Field
 class AssessmentRequest(BaseModel):
     """Minimal triage assessment submitted by a consumer.
 
-    All fields are optional because the existing Phase-1 validation pipeline
-    treats missing vitals as informative (see ``temperature_missing`` etc.)
-    rather than fatal. Fields are validated at inference time against the
-    dataset-specific envelopes documented in ``docs/DATASET_AUDIT.md``.
+    All fields are optional because missing vitals are treated as informative
+    (missingness indicators added during preprocessing) rather than fatal.
+    Fields are validated at inference time against the dataset-specific
+    envelopes documented in the Triagegeist schema.
     """
 
-    subject_id: Optional[str] = Field(
+    patient_id: Optional[str] = Field(
         None,
         description=(
-            "Optional opaque identifier used only for debugging. Must not "
-            "be used for real patient PII."
+            "Optional opaque patient identifier used only for debugging. "
+            "Must not be used for real patient PII."
         ),
         examples=["demo-001"],
     )
-    temperature: Optional[float] = Field(
+    heart_rate: Optional[float] = Field(
         None,
-        description=(
-            "Body temperature recorded at triage. Celsius values <= 45 are "
-            "assumed Celsius; > 45 are assumed Fahrenheit and converted. "
-            "Values outside [34, 42] C after conversion become missing."
-        ),
-        examples=[98.6, 37.0],
-    )
-    heartrate: Optional[float] = Field(
-        None,
-        ge=30.0,
+        ge=20.0,
         le=220.0,
         description="Heart rate in beats per minute.",
         examples=[80.0],
     )
-    resprate: Optional[float] = Field(
+    respiratory_rate: Optional[float] = Field(
         None,
         ge=4.0,
         le=60.0,
         description="Respiratory rate in breaths per minute.",
         examples=[16.0],
     )
-    o2sat: Optional[float] = Field(
+    temperature_c: Optional[float] = Field(
+        None,
+        description="Body temperature in Celsius.",
+        examples=[37.0, 98.6],
+    )
+    spo2: Optional[float] = Field(
         None,
         ge=50.0,
         le=100.0,
         description="Peripheral oxygen saturation as a percent.",
         examples=[98.0],
     )
-    sbp: Optional[float] = Field(
+    systolic_bp: Optional[float] = Field(
         None,
         ge=50.0,
         le=250.0,
         description="Systolic blood pressure in mmHg.",
         examples=[120.0],
     )
-    dbp: Optional[float] = Field(
+    diastolic_bp: Optional[float] = Field(
         None,
         ge=30.0,
         le=150.0,
         description="Diastolic blood pressure in mmHg.",
         examples=[80.0],
     )
-    pain: Optional[float] = Field(
+    pain_score: Optional[float] = Field(
         None,
         ge=0.0,
         le=10.0,
         description=(
-            "Numeric pain score on a 0-10 scale. Values > 10 or non-numeric "
-            "tokens (e.g. 'UA', 'unable') become missing with a retained "
-            "indicator."
+            "Numeric pain score on a 0-10 scale."
         ),
         examples=[5.0],
     )
-    arrival_transport: Optional[str] = Field(
+    arrival_mode: Optional[str] = Field(
         None,
         description=(
             "Mode of arrival (e.g. 'AMBULANCE', 'WALK IN', 'UNKNOWN'). "
@@ -92,14 +86,53 @@ class AssessmentRequest(BaseModel):
         ),
         examples=["AMBULANCE"],
     )
-    chiefcomplaint: Optional[str] = Field(
+    chief_complaint_system: Optional[str] = Field(
         None,
         description=(
-            "Chief complaint text as recorded at triage. Placeholders such "
-            "as 'UNKNOWN-CC' are normalized to 'unknown'. The text is "
-            "processed through a train-fitted TF-IDF vocabulary."
+            "Chief complaint system category (e.g. 'Cardiovascular', "
+            "'Respiratory', 'Neurological', 'Abdominal', 'Trauma')."
         ),
         examples=["CHEST PAIN"],
+    )
+    age: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=120.0,
+        description="Patient age in years.",
+        examples=[45.0],
+    )
+    sex: Optional[str] = Field(
+        None,
+        description="Patient biological sex (M, F, Other, Unknown).",
+        examples=["M", "F"],
+    )
+    arrival_hour: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=23.0,
+        description="Hour of arrival (0-23).",
+        examples=[14.0],
+    )
+    shock_index: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=10.0,
+        description="Shock index (heart_rate / systolic_bp).",
+        examples=[0.8],
+    )
+    num_prior_ed_visits_12m: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=50.0,
+        description="Prior ED visits in 12 months.",
+        examples=[2.0],
+    )
+    num_active_medications: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=30.0,
+        description="Active medications count.",
+        examples=[3.0],
     )
 
 
@@ -124,13 +157,11 @@ class ModelInfoResponse(BaseModel):
     created_utc: str
     limitations: list[str] = Field(
         default_factory=lambda: [
-            "Demo subset only (207 labeled rows).",
-            "ESI Level 5 has zero support in the training data; predictions for "
-            "that class are meaningless.",
-            "ESI Level 4 has only 2 examples; per-class metrics are unstable.",
+            "Synthetic dataset only.",
+            "ESI Level 5 may have limited support; predictions for that class "
+            "may be unreliable.",
             "This model is a research prototype and is NOT clinically validated.",
-            "The raw MIMIC data is licensed under ODbL and may not be uploaded "
-            "to external services.",
+            "Not suitable for real clinical triage decisions.",
         ]
     )
     note: str
@@ -167,7 +198,6 @@ class ExplanationResponse(BaseModel):
     )
 
 
-
 class QualityWarning(BaseModel):
     """Input quality or distribution warning."""
     code: str
@@ -182,7 +212,6 @@ class InputQualityResponse(BaseModel):
     has_warnings: bool = False
     warnings: list[QualityWarning] = Field(default_factory=list)
     errors: list[QualityWarning] = Field(default_factory=list)
-
 
 
 class ErrorResponse(BaseModel):
@@ -201,7 +230,6 @@ class UncertaintyResponse(BaseModel):
     available: bool = True
     calibration_status: str = "unsupported_by_sample_size"
     note: str = "Indicators describe model confidence patterns, not clinical certainty."
-
 
 
 class PredictResponse(BaseModel):

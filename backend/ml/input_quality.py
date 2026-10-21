@@ -1,6 +1,7 @@
 """Input quality and OOD assessment for MedGuard.
 
-Provides conservative, documented checks against training distribution statistics.
+Provides conservative, documented checks against training distribution statistics
+for the Triagegeist synthetic dataset.
 No patient identifiers or raw training rows are stored. All checks are transparent.
 """
 
@@ -14,9 +15,10 @@ import numpy as np
 import pandas as pd
 
 from backend.ml import config
+from backend.ml.triagegeist_schema import NUMERIC_FEATURE_COLUMNS, CATEGORICAL_FEATURE_COLUMNS
 
 
-DEFAULT_STATS_PATH = config.REPORTS_DIR / "training_distribution_stats.json"
+DEFAULT_STATS_PATH = config.REPORTS_DIR / "triagegeist_training_stats.json"
 Z_WARNING = 3.0  # Unusually far from mean (conservative)
 
 
@@ -72,8 +74,8 @@ def assess_input_quality(
     numeric_stats = stats.get("numeric", {})
     cat_stats = stats.get("categorical", {})
 
-    # Check numeric features
-    numeric_cols = ["temperature", "heartrate", "resprate", "o2sat", "sbp", "dbp", "pain"]
+    # Check numeric features using Triagegeist schema
+    numeric_cols = NUMERIC_FEATURE_COLUMNS
     for col in numeric_cols:
         if col not in sample_frame.columns:
             continue
@@ -109,18 +111,21 @@ def assess_input_quality(
                     details={"value": float(val), "z": float(z), "threshold": Z_WARNING},
                 )
 
-    # Check categorical
-    if "arrival_transport" in sample_frame.columns:
-        val = str(sample_frame["arrival_transport"].iloc[0]).upper().strip() if len(sample_frame) > 0 else ""
-        if pd.isna(sample_frame["arrival_transport"].iloc[0]):
-            val = "UNKNOWN"
-        at_stats = cat_stats.get("arrival_transport", {})
-        if at_stats and val not in at_stats:
+    # Check categorical features using Triagegeist schema
+    for col in CATEGORICAL_FEATURE_COLUMNS:
+        if col not in sample_frame.columns:
+            continue
+        val = sample_frame[col].iloc[0] if len(sample_frame) > 0 else None
+        if pd.isna(val):
+            continue
+        val_str = str(val).strip().upper()
+        cat_stats_col = cat_stats.get(col, {})
+        if cat_stats_col and val_str not in cat_stats_col:
             result.add_warning(
                 "OOD_CATEGORICAL",
-                f"arrival_transport '{val}' not observed in training data",
-                feature="arrival_transport",
-                details={"value": val, "observed_in_training": False},
+                f"{col} '{val_str}' not observed in training data",
+                feature=col,
+                details={"value": val_str, "observed_in_training": False},
             )
 
     return result.to_dict()
