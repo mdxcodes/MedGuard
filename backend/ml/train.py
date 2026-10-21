@@ -84,6 +84,7 @@ def persist_pipeline(
     model_name: str,
     training_rows: int,
     training_patients: int,
+    class_distribution: dict[str, int] | None = None,
 ) -> Path:
     """Persist a fitted pipeline with ``joblib`` and return the written path."""
     from datetime import datetime, timezone
@@ -91,16 +92,27 @@ def persist_pipeline(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, path)
+
+    # Report the parameters the estimator was actually built with, not a
+    # registry entry that may belong to a different construction path.
+    estimator = pipeline.named_steps.get("estimator", pipeline)
+    actual_params = {
+        key: value
+        for key, value in estimator.get_params().items()
+        if isinstance(value, (int, float, str, bool, type(None)))
+    }
+
     manifest = {
         "model_name": model_name,
-        "model_kind": type(pipeline.named_steps["estimator"]).__name__ if "estimator" in pipeline.named_steps else type(pipeline).__name__,
+        "model_kind": type(estimator).__name__,
         "target": config.TARGET_COLUMN,
         "esi_labels": list(config.ESI_LABELS),
         "dataset": triagegeist_schema.dataset_provenance()["name"],
         "training_rows": training_rows,
         "training_patients": training_patients,
+        "class_distribution": dict(class_distribution or {}),
         "random_seed": RANDOM_SEED,
-        "params": dict(MODEL_REGISTRY.get(model_name, {}).get("params", {})),
+        "params": actual_params,
         "versions": {
             "python": platform.python_version(),
             "scikit-learn": sklearn.__version__,

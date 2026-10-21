@@ -50,8 +50,8 @@ export default function OverviewPage() {
   const m = metrics.metrics || {};
   const holdout = m.holdout || {};
   const cv = m.cv || {};
-  const esi4Count = classDist['ESI 4'] ?? 0;
-  const esi4Pct = totalRows > 0 ? ((esi4Count / totalRows) * 100).toFixed(2) : '0.0';
+  const esi1Count = classDist['ESI 1'] ?? 0;
+  const esi1Pct = totalRows > 0 ? ((esi1Count / totalRows) * 100).toFixed(2) : '0.0';
   const esi5Count = classDist['ESI 5'] ?? 0;
   const esi23Share = totalRows > 0 ? (((classDist['ESI 2'] ?? 0) + (classDist['ESI 3'] ?? 0)) / totalRows * 100).toFixed(1) : '0.0';
 
@@ -160,15 +160,15 @@ export default function OverviewPage() {
                         <div className={`h-full rounded-full ${getToneColor(lvl === 4 ? 'slate' : lvl === 5 ? 'slate' : lvl === 1 ? 'rose' : lvl === 2 ? 'amber' : 'teal')}`} style={{ width: `${parseFloat(pct)}%` }} />
                       </div>
                       <div className="w-16 text-right text-xs font-mono text-secondary">{count} · {pct}%</div>
-                      <span className="w-14 text-[10px] font-mono text-muted">{lvl === 4 ? 'Very Sparse' : lvl === 5 ? 'Absent' : lvl === 1 ? 'Sparse' : 'Dominant'}</span>
+                      <span className="w-14 text-[10px] font-mono text-muted">{lvl === 1 ? 'Rarest' : lvl === 5 ? 'Rare' : lvl === 3 ? 'Dominant' : 'Common'}</span>
                     </div>
                   );
                 })}
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
-              ESI 4 has only {esi4Count} examples ({esi4Pct}%) and ESI 5 has {esi5Count} — metrics for those levels are not reliable.
-              Patient repetition may exist in the synthetic dataset.
+              ESI 1 has {esi1Count} examples ({esi1Pct}%) and ESI 5 has {esi5Count} — metrics for the rarer levels are less certain than for the dominant ones.
+              Triagegeist supplies one encounter per patient, so patient-grouped splitting is exact.
             </div>
           </SectionCard>
         </div>
@@ -185,7 +185,7 @@ export default function OverviewPage() {
               </li>
               <li className="flex gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-                <span className="flex-1"><strong>ESI 5 may be unlearnable.</strong> If ESI 5 has zero or very few labelled rows, probabilities for that class may be unreliable.</span>
+                <span className="flex-1"><strong>All five ESI levels are present.</strong> Triagegeist supplies labelled examples for every level, though the least common level (ESI 1) is far rarer than the dominant ones.</span>
               </li>
               <li className="flex gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />

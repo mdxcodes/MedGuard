@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from backend.ml import splitting
+from backend.ml import config, splitting
 from backend.ml.data_loading import load_joined_dataset, verify_checksums
 from backend.ml.features import (
     build_feature_frame,
@@ -50,7 +50,7 @@ class TestPipelineEndToEnd:
         assert prepared["train_patients"] + prepared["test_patients"] > 0
 
     def test_no_patient_group_overlap(self):
-        frame = build_feature_frame(load_joined_dataset())
+        frame = build_feature_frame(load_joined_dataset()["train"])
         train, test = splitting.patient_grouped_split(frame)
         assert not (set(train["patient_id"]) & set(test["patient_id"]))
 
@@ -101,7 +101,7 @@ class TestPipelineEndToEnd:
         assert results == {}  # Triagegeist has no checksum manifest
 
     def test_preprocessor_fits_on_train_only(self):
-        frame = build_feature_frame(load_joined_dataset())
+        frame = build_feature_frame(load_joined_dataset()["train"])
         train, test = splitting.patient_grouped_split(frame)
         preprocessor = build_preprocessor()
         preprocessor.fit(train)

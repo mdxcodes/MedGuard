@@ -41,6 +41,7 @@ from backend.ml import config, train, triagegeist_schema
 from backend.ml.triagegeist_loader import load_all, DEFAULT_DIR
 from backend.ml.triagegeist_preprocessing import (
     build_preprocessor,
+    build_preprocessor_for_frame,
     build_feature_frame,
     assert_no_leakage_columns,
     leakage_free_feature_names,
@@ -299,11 +300,7 @@ def run_training(
 
     # Build a preprocessor restricted to columns actually present in the data
     # (e.g. history booleans live in patient_history.csv and are not joined here).
-    preprocess = build_preprocessor(
-        numeric_features=[c for c in triagegeist_schema.NUMERIC_FEATURE_COLUMNS if c in train_split.columns],
-        categorical_features=[c for c in triagegeist_schema.CATEGORICAL_FEATURE_COLUMNS if c in train_split.columns],
-        boolean_features=[c for c in triagegeist_schema.BOOLEAN_FEATURE_COLUMNS if c in train_split.columns],
-    )
+    preprocess = build_preprocessor_for_frame(train_split)
 
     # 3. Baseline evaluation on validation holdout
     baselines = ["dummy"]
@@ -377,6 +374,13 @@ def run_training(
         model_name=best_model_name,
         training_rows=len(train_df),
         training_patients=int(train_df[triagegeist_schema.PATIENT_ID_COLUMN].nunique()),
+        class_distribution={
+            f"ESI {int(level)}": int(count)
+            for level, count in train_df[triagegeist_schema.TARGET_COLUMN]
+            .value_counts()
+            .sort_index()
+            .items()
+        },
     )
     logger.info("Persisted model to %s", model_artifact_path)
 

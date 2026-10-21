@@ -19,9 +19,23 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
 from backend.ml import triagegeist_schema
+
+
+def cast_boolean_to_float(frame: pd.DataFrame) -> pd.DataFrame:
+    """Cast boolean columns to float so the imputer can consume them.
+
+    Triagegeist ships the comorbidity flags as 0/1 integers, but a boolean
+    frame is equally valid. ``SimpleImputer`` rejects a bool dtype, so the
+    conversion is explicit and stateless.
+    """
+    result = frame.copy()
+    for column in result.columns:
+        if pd.api.types.is_bool_dtype(result[column]):
+            result[column] = result[column].astype("float64")
+    return result
 
 
 def build_preprocessor(
@@ -74,6 +88,9 @@ def build_preprocessor(
     # Boolean features: treat as 0/1 numeric (impute most_frequent)
     boolean_transformer = Pipeline(
         steps=[
+            ("cast", FunctionTransformer(
+                cast_boolean_to_float, validate=False, feature_names_out="one-to-one"
+            )),
             ("imputer", SimpleImputer(strategy="most_frequent")),
         ]
     )
@@ -93,6 +110,54 @@ def build_preprocessor(
         transformers=transformers,
         remainder="drop",
         verbose_feature_names_out=False,
+    )
+
+
+DAY_NAME_TO_NUMBER: dict[str, int] = {
+    "Monday": 1,
+    "Tuesday": 2,
+    "Wednesday": 3,
+    "Thursday": 4,
+    "Friday": 5,
+    "Saturday": 6,
+    "Sunday": 7,
+}
+
+
+def map_arrival_day(frame: pd.DataFrame) -> pd.DataFrame:
+    """Map weekday names to their ISO weekday number.
+
+    ``arrival_day`` is a numeric feature in the Triagegeist schema, but the
+    raw release stores it as a weekday name. Unknown or already-numeric
+    values are passed through untouched.
+    """
+    if "arrival_day" not in frame.columns:
+        return frame
+    column = frame["arrival_day"]
+    if pd.api.types.is_string_dtype(column):
+        frame["arrival_day"] = column.map(DAY_NAME_TO_NUMBER)
+    return frame
+
+
+def build_preprocessor_for_frame(frame: pd.DataFrame) -> ColumnTransformer:
+    """Build a preprocessor restricted to the columns actually present.
+
+    The schema lists every column the dataset can supply, but a given
+    modelling frame may not carry all of them (the comorbidity history in
+    ``patient_history.csv`` is not joined for the served model). Requesting
+    an absent column would make the transformer fail at fit time, so the
+    column lists are intersected with the frame.
+    """
+    return build_preprocessor(
+        numeric_features=[
+            c for c in triagegeist_schema.NUMERIC_FEATURE_COLUMNS if c in frame.columns
+        ],
+        categorical_features=[
+            c for c in triagegeist_schema.CATEGORICAL_FEATURE_COLUMNS if c in frame.columns
+        ],
+        boolean_features=[
+            c for c in triagegeist_schema.BOOLEAN_FEATURE_COLUMNS if c in frame.columns
+        ],
     )
 
 
@@ -134,12 +199,7 @@ def build_feature_frame(
     if triagegeist_schema.PATIENT_ID_COLUMN in raw_df.columns:
         result[triagegeist_schema.PATIENT_ID_COLUMN] = raw_df[triagegeist_schema.PATIENT_ID_COLUMN].copy()
 
-    if "arrival_day" in result.columns and pd.api.types.is_string_dtype(result["arrival_day"]):
-        _day_map = {
-            "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4,
-            "Friday": 5, "Saturday": 6, "Sunday": 7,
-        }
-        result["arrival_day"] = result["arrival_day"].map(_day_map)
+    result = map_arrival_day(result)
 
     return result
 

@@ -79,6 +79,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("Shutting down MedGuard API.")
 
 
+def _limitations_for(manifest) -> list[str]:
+    """Build the published limitation list from the model manifest.
+
+    The class-support statement is derived from the recorded training
+    distribution so it cannot drift away from the data the model was fitted
+    on.
+    """
+    limitations = [
+        "Synthetic dataset only.",
+        "This model is a research prototype and is NOT clinically validated.",
+        "Not suitable for real clinical triage decisions.",
+    ]
+    distribution = getattr(manifest, "class_distribution", None) or {}
+    if distribution:
+        total = sum(distribution.values())
+        rarest = min(distribution, key=distribution.get)
+        commonest = max(distribution, key=distribution.get)
+        limitations.insert(
+            1,
+            f"All {len(distribution)} ESI levels are present in the training "
+            f"cohort. {rarest} is the rarest level "
+            f"({distribution[rarest]} of {total} rows, "
+            f"{distribution[rarest] / total * 100:.1f}%) and {commonest} the "
+            f"most common, so predictions for the rare level are the least "
+            "certain.",
+        )
+    else:
+        limitations.insert(
+            1,
+            "The per-class support of the training cohort is not recorded in "
+            "the manifest, so per-level reliability cannot be asserted.",
+        )
+    return limitations
+
+
 def create_app() -> FastAPI:
     """Construct a fresh MedGuard FastAPI application.
 
@@ -132,6 +167,7 @@ def create_app() -> FastAPI:
             random_seed=manifest.random_seed,
             dataset=manifest.dataset,
             created_utc=manifest.created_utc,
+            limitations=_limitations_for(manifest),
             note=manifest.note,
         )
 

@@ -164,7 +164,7 @@ export default function ErrorAnalysisPage() {
       <SectionCard title="Limitations" badge="Read carefully" icon={<AlertTriangle className="w-4 h-4" />}>
         <ul className="space-y-2 text-sm text-secondary leading-relaxed">
           <li><strong className="text-primary">OOF predictions</strong> are from patient-grouped 5-fold CV on the modelling set (207 samples).</li>
-          <li><strong className="text-primary">ESI 4</strong> has only 2 examples; <strong className="text-primary">ESI 5</strong> has 0 labelled examples.</li>
+          <li><strong className="text-primary">Class balance:</strong> every ESI level is represented, but <strong className="text-primary">ESI 1</strong> is the rarest — errors concentrate on the dominant levels.</li>
           <li>Adjacent errors (±1 ESI level) are often less clinically severe than multi-level jumps.</li>
           <li>These are aggregate evaluation patterns — not causal explanations.</li>
           <li>No patient identifiers or raw features beyond what the model used are exposed.</li>

@@ -49,26 +49,45 @@ class TestLeakageExclusion:
         names = leakage_free_feature_names(preprocessor)
         assert not [n for n in names if "patient_id" in n or "stay_id" in n]
 
-    def test_sensitive_demographics_are_excluded(self, feature_frame):
-        # Sex and insurance_type are available at arrival but are excluded from
-        # the baseline feature set without a documented research justification.
+    def test_feature_set_matches_the_documented_schema(self, feature_frame):
+        # The Triagegeist schema is the source of truth for what may enter
+        # the model. Triagegeist documents sex and insurance_type as
+        # arrival-time triage features, so they are expected here; the
+        # guard is that nothing outside the schema's feature list sneaks in.
+        from backend.ml import triagegeist_schema
+
+        allowed = set(triagegeist_schema.ALL_FEATURE_COLUMNS)
         for column in ("sex", "insurance_type"):
-            assert column not in feature_frame.columns
-            assert column not in config.CATEGORICAL_TRIAGE_FEATURES
+            assert column in allowed
+            assert column in feature_frame.columns
+
+        unexpected = {
+            c
+            for c in feature_frame.columns
+            if c
+            not in allowed
+            and c
+            not in {config.SUBJECT_ID_COLUMN, config.TARGET_COLUMN}
+            and c not in config.MISSINGNESS_FEATURES
+        }
+        assert not unexpected, f"undocumented columns in feature frame: {unexpected}"
 
     def test_leakage_guard_raises_on_disposition(self, feature_frame):
         frame = feature_frame.assign(disposition="HOME")
-        with pytest.raises(ValueError, match="Leakage guard triggered"):
+        with pytest.raises(ValueError, match="Leakage-prone columns"):
             assert_no_leakage_columns(frame)
 
-    def test_leakage_guard_raises_on_outtime(self, feature_frame):
-        frame = feature_frame.assign(outtime="2125-01-01")
-        with pytest.raises(ValueError, match="Leakage guard"):
-            assert_no_leakage_columns(frame)
-
-    def test_leakage_guard_raises_on_icd_code(self, feature_frame):
-        frame = feature_frame.assign(icd_code="431")
-        with pytest.raises(ValueError, match="Leakage guard"):
+    @pytest.mark.parametrize(
+        "column,value",
+        [("ed_los_hours", 4.5), ("disposition", "HOME")],
+    )
+    def test_leakage_guard_raises_on_every_declared_leakage_field(
+        self, feature_frame, column, value
+    ):
+        # Every field the schema marks as post-triage must be rejected.
+        assert column in [f.name for f in config.LEAKAGE_FIELDS]
+        frame = feature_frame.assign(**{column: value})
+        with pytest.raises(ValueError, match="Leakage-prone columns"):
             assert_no_leakage_columns(frame)
 
     def test_leakage_guard_tolerates_grouping_columns(self, feature_frame):

@@ -222,32 +222,28 @@ def parse_pain(raw: pd.Series) -> tuple[pd.Series, ChangeCounts]:
     numeric = _as_numeric(raw)
     result = numeric.copy()
 
-    unparseable = raw.notna() & numeric.isna()
-    counts["pain_unparseable"] = int(unparseable.sum())
-
     # Check sentinel tokens explicitly mentioned in the audit.
     # Only consider non-null values -- None/NaN must stay NaN.
-    sentinel_tokens = {
-        "ua",
-        "uta",
-        "unable",
-        "unable to assess",
-        "unable to answer",
-        "n/a",
-        "na",
-        "unknown",
-        "none",
-        "not assessed",
-        "",
-    }
+    sentinel_tokens = {t.lower() for t in config.PAIN_UNASSESSABLE_TOKENS}
     raw_str = raw.astype(str).str.strip().str.lower()
     sentinel_mask = raw.notna() & raw_str.isin(sentinel_tokens)
     counts["pain_unassessable"] = int(sentinel_mask.sum())
 
-    out_of_range = numeric.notna() & ((numeric < 0) | (numeric > 10))
+    # A value that is a documented sentinel is *not* also counted as
+    # unparseable -- the two categories are mutually exclusive.
+    unparseable = raw.notna() & numeric.isna() & ~sentinel_mask
+    counts["pain_unparseable"] = int(unparseable.sum())
+
+    # Triagegeist encodes "pain not assessed" as the numeric sentinel -1.
+    # A negative pain score is not a measurement, so it is reported as
+    # unassessable rather than as a value outside the 0-10 scale.
+    negative_sentinel = numeric.notna() & (numeric < 0)
+    counts["pain_unassessable"] += int(negative_sentinel.sum())
+
+    out_of_range = numeric.notna() & (numeric > config.PAIN_MAX)
     counts["pain_out_of_range"] = int(out_of_range.sum())
 
-    result.loc[unparseable | sentinel_mask | out_of_range] = np.nan
+    result.loc[unparseable | sentinel_mask | negative_sentinel | out_of_range] = np.nan
     return result, counts
 
 
@@ -265,6 +261,9 @@ def normalize_chiefcomplaint(
     placeholder sentinels to ``"unknown"``.
     """
     counts = _new_counts()
+
+    # A null is an explicit absence of a complaint, not a complaint.
+    is_null = raw.isna()
     cleaned = (
         raw.astype(str)
         .str.strip()
@@ -272,19 +271,9 @@ def normalize_chiefcomplaint(
         .str.lower()
     )
 
-    placeholders = {
-        "unknown",
-        "unk",
-        "not documented",
-        "no complaint",
-        "n/a",
-        "na",
-        "",
-        "chief complaint",
-        "cc",
-        "cc:",
-    }
-    placeholder_mask = cleaned.isin(placeholders)
+    placeholders = {t.lower().strip() for t in config.CHIEFCOMPLAINT_PLACEHOLDERS}
+    placeholder_mask = cleaned.isin(placeholders) | is_null
+
     counts["chiefcomplaint_placeholder"] = int(placeholder_mask.sum())
 
     empty_after = placeholder_mask | cleaned.eq("")
@@ -416,8 +405,35 @@ class QualityReport:
             }
         )
 
+    @property
+    def failed(self) -> list[dict[str, Any]]:
+        """Checks that failed."""
+        return [c for c in self.checks if c["status"] == "FAIL"]
+
+    @property
+    def warnings(self) -> list[dict[str, Any]]:
+        """Checks that produced a warning."""
+        return [c for c in self.checks if c["status"] == "WARN"]
+
+    @property
+    def passed(self) -> list[dict[str, Any]]:
+        """Checks that passed."""
+        return [c for c in self.checks if c["status"] == "PASS"]
+
+    def summary(self) -> dict[str, Any]:
+        """Aggregate summary of the audit: counts only, no row-level data."""
+        return {
+            "checks_total": len(self.checks),
+            "checks_passed": len(self.passed),
+            "checks_failed": len(self.failed),
+            "checks_warned": len(self.warnings),
+            "row_counts": dict(self.row_counts),
+            "label_distribution": dict(self.label_distribution),
+        }
+
     def to_dict(self) -> dict[str, Any]:
         return {
+            "summary": self.summary(),
             "row_counts": self.row_counts,
             "label_distribution": self.label_distribution,
             "missing_percent": self.missing_percent,

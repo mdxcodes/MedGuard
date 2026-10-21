@@ -1,0 +1,237 @@
+{
+  "generated_at_utc": "2026-10-21T11:08:52.121574+00:00",
+  "dataset": "Triagegeist",
+  "n_samples": 80000,
+  "numeric": {
+    "age": {
+      "count": 80000,
+      "mean": 48.544225,
+      "std": 24.187377268926348,
+      "min": 1.0,
+      "max": 94.0
+    },
+    "arrival_hour": {
+      "count": 80000,
+      "mean": 11.4306,
+      "std": 6.9234535197399865,
+      "min": 0.0,
+      "max": 23.0
+    },
+    "arrival_day": {
+      "count": 80000,
+      "mean": 3.9981625,
+      "std": 1.999427198873155,
+      "min": 1.0,
+      "max": 7.0
+    },
+    "arrival_month": {
+      "count": 80000,
+      "mean": 6.5074125,
+      "std": 3.4574224582546678,
+      "min": 1.0,
+      "max": 12.0
+    },
+    "heart_rate": {
+      "count": 80000,
+      "mean": 91.85862250000001,
+      "std": 19.488866582038415,
+      "min": 30.0,
+      "max": 207.7
+    },
+    "respiratory_rate": {
+      "count": 76933,
+      "mean": 18.33385673248151,
+      "std": 4.647312023646459,
+      "min": 8.0,
+      "max": 51.5
+    },
+    "temperature_c": {
+      "count": 79426,
+      "mean": 37.631416664568285,
+      "std": 0.8565117446402913,
+      "min": 35.1,
+      "max": 41.8
+    },
+    "spo2": {
+      "count": 80000,
+      "mean": 95.79380125,
+      "std": 4.306729292688181,
+      "min": 60.4,
+      "max": 100.0
+    },
+    "systolic_bp": {
+      "count": 75854,
+      "mean": 121.61259920373348,
+      "std": 24.221738602794105,
+      "min": 40.0,
+      "max": 226.9
+    },
+    "diastolic_bp": {
+      "count": 75854,
+      "mean": 74.45233870329844,
+      "std": 14.285518819269138,
+      "min": 20.0,
+      "max": 134.8
+    },
+    "pain_score": {
+      "count": 80000,
+      "mean": 4.505975,
+      "std": 3.3597417012882107,
+      "min": -1.0,
+      "max": 10.0
+    },
+    "shock_index": {
+      "count": 75854,
+      "mean": 0.8100192475017797,
+      "std": 0.3270045498302831,
+      "min": 0.19,
+      "max": 4.768
+    },
+    "pulse_pressure": {
+      "count": 75854,
+      "mean": 47.16026050043505,
+      "std": 24.253457794889172,
+      "min": -51.0,
+      "max": 163.7
+    },
+    "mean_arterial_pressure": {
+      "count": 75854,
+      "mean": 90.1724338861497,
+      "std": 14.17393951347738,
+      "min": 30.7,
+      "max": 145.1
+    },
+    "gcs_total": {
+      "count": 80000,
+      "mean": 14.152125,
+      "std": 2.1457476516065443,
+      "min": 3.0,
+      "max": 15.0
+    },
+    "weight_kg": {
+      "count": 80000,
+      "mean": 74.453355,
+      "std": 21.33969553423795,
+      "min": 2.0,
+      "max": 148.5
+    },
+    "height_cm": {
+      "count": 80000,
+      "mean": 168.62368,
+      "std": 16.592152444984347,
+      "min": 45.0,
+      "max": 210.0
+    },
+    "bmi": {
+      "count": 80000,
+      "mean": 26.3597725,
+      "std": 7.666403687404136,
+      "min": 10.0,
+      "max": 65.0
+    },
+    "news2_score": {
+      "count": 80000,
+      "mean": 3.426825,
+      "std": 4.258537943869351,
+      "min": 0.0,
+      "max": 17.0
+    },
+    "num_prior_ed_visits_12m": {
+      "count": 80000,
+      "mean": 1.3781625,
+      "std": 1.429599812392877,
+      "min": 0.0,
+      "max": 11.0
+    },
+    "num_prior_admissions_12m": {
+      "count": 80000,
+      "mean": 0.4147,
+      "std": 0.7735301610150699,
+      "min": 0.0,
+      "max": 9.0
+    },
+    "num_active_medications": {
+      "count": 80000,
+      "mean": 4.791425,
+      "std": 3.858380031745836,
+      "min": 0.0,
+      "max": 20.0
+    },
+    "num_comorbidities": {
+      "count": 80000,
+      "mean": 5.3488375,
+      "std": 3.187275466380926,
+      "min": 0.0,
+      "max": 20.0
+    }
+  },
+  "categorical": {
+    "sex": {
+      "F": 40339,
+      "M": 37735,
+      "OTHER": 1926
+    },
+    "language": {
+      "FINNISH": 44134,
+      "ENGLISH": 8024,
+      "SWEDISH": 6315,
+      "RUSSIAN": 5587,
+      "ESTONIAN": 4858,
+      "OTHER": 3968,
+      "ARABIC": 3944,
+      "SOMALI": 3170
+    },
+    "insurance_type": {
+      "PUBLIC": 48170,
+      "PRIVATE": 19915,
+      "NONE": 6320,
+      "MILITARY": 3196,
+      "UNKNOWN": 2399
+    },
+    "arrival_mode": {
+      "WALK-IN": 38459,
+      "AMBULANCE": 22404,
+      "TRANSFER": 7987,
+      "BROUGHT_BY_FAMILY": 5583,
+      "POLICE": 3162,
+      "HELICOPTER": 2405
+    },
+    "transport_origin": {
+      "SCHOOL": 11571,
+      "WORKPLACE": 11499,
+      "OUTDOOR": 11459,
+      "PUBLIC_SPACE": 11430,
+      "NURSING_HOME": 11393,
+      "OTHER_HOSPITAL": 11339,
+      "HOME": 11309
+    },
+    "arrival_season": {
+      "AUTUMN": 20054,
+      "WINTER": 20032,
+      "SPRING": 20013,
+      "SUMMER": 19901
+    },
+    "shift": {
+      "MORNING": 26681,
+      "NIGHT": 20239,
+      "AFTERNOON": 19962,
+      "EVENING": 13118
+    },
+    "chief_complaint_system": {
+      "GASTROINTESTINAL": 5812,
+      "RESPIRATORY": 5804,
+      "INFECTIOUS": 5764,
+      "ENDOCRINE": 5749,
+      "MUSCULOSKELETAL": 5733,
+      "TRAUMA": 5726,
+      "GENITOURINARY": 5724,
+      "CARDIOVASCULAR": 5718,
+      "NEUROLOGICAL": 5691,
+      "PSYCHIATRIC": 5688,
+      "ENT": 5680,
+      "OPHTHALMIC": 5644,
+      "OTHER": 5642,
+      "DERMATOLOGICAL": 5625
+    }
+  }
+}

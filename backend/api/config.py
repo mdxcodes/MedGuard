@@ -64,6 +64,7 @@ class ModelManifest(BaseModel):
     dataset: str
     training_rows: int
     training_patients: int
+    class_distribution: dict[str, int] = {}
     random_seed: int
     params: dict[str, Any]
     versions: dict[str, str]

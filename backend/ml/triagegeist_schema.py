@@ -173,7 +173,6 @@ FIELDS: list[FieldSchema] = [
     FieldSchema("hx_peripheral_vascular_disease", "feature", "boolean", "History of PVD"),
 
     # ---------------- HPI / reason for visit ----------------
-    FieldSchema("hpi_present", "feature", "boolean", "HPI present flag"),
 ]
 
 #: Chief complaint raw text lives in chief_complaints.csv (joined on patient_id).

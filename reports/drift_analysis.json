@@ -1,0 +1,35 @@
+{
+  "numeric_psi": {
+    "age": 0.0003232834850032115,
+    "arrival_hour": 0.00020811294430517202,
+    "arrival_day": 0.0001515492023786224,
+    "arrival_month": 0.0002755892126430529,
+    "heart_rate": 0.01629545356995327,
+    "respiratory_rate": 0.049332526000880804,
+    "temperature_c": 0.14215413413954092,
+    "spo2": 0.011631496048425175,
+    "systolic_bp": 0.12858247081049795,
+    "diastolic_bp": 0.005126041725998388,
+    "pain_score": 0.00015041934615316714,
+    "shock_index": 0.19530651782739866,
+    "pulse_pressure": 0.02298672628475023,
+    "mean_arterial_pressure": 0.02713276873584375,
+    "gcs_total": 0.00013967508079424767,
+    "weight_kg": 0.024669294921562484,
+    "height_cm": 0.0005834036713748789,
+    "bmi": 4.1418384374817655e-05,
+    "news2_score": 0.0004771937858771096,
+    "num_prior_ed_visits_12m": 0.18759328962274663,
+    "num_prior_admissions_12m": 0.027641757302064564,
+    "num_active_medications": 0.00013050116533091353,
+    "num_comorbidities": 0.0007186665781541954
+  },
+  "sample_sizes": {
+    "ref": 64000,
+    "comp": 16000
+  },
+  "status": "limited",
+  "reference": "training_split_patient_grouped",
+  "comparison": "holdout_split_patient_grouped",
+  "note": "Same cohort, different patient-grouped partition. Differences reflect sampling variation only; this is not a real-world drift measurement."
+}

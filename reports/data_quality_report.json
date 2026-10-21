@@ -1,0 +1,162 @@
+{
+  "generated_at_utc": "2026-10-21T11:08:50.871761+00:00",
+  "dataset": {
+    "name": "Triagegeist",
+    "version": "synthetic",
+    "variant": "train split",
+    "license": "Non-commercial research (Kaggle competition terms)"
+  },
+  "target": {
+    "column": "triage_acuity",
+    "labels": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "label_meaning": "original five-level ESI acuity, preserved as-is"
+  },
+  "random_seed": 20260915,
+  "row_counts": {
+    "modelling_rows": 80000,
+    "modelling_patients": 80000,
+    "train_rows": 64000,
+    "test_rows": 16000,
+    "train_patients": 64000,
+    "test_patients": 16000
+  },
+  "label_distribution": {
+    "ESI 1": 3222,
+    "ESI 2": 13439,
+    "ESI 3": 28921,
+    "ESI 4": 23020,
+    "ESI 5": 11398
+  },
+  "missing_percent": {
+    "age": 0.0,
+    "arrival_hour": 0.0,
+    "arrival_day": 0.0,
+    "arrival_month": 0.0,
+    "heart_rate": 0.0,
+    "respiratory_rate": 3.83,
+    "temperature_c": 0.72,
+    "spo2": 0.0,
+    "systolic_bp": 5.18,
+    "diastolic_bp": 5.18,
+    "pain_score": 0.0,
+    "shock_index": 5.18,
+    "pulse_pressure": 5.18,
+    "mean_arterial_pressure": 5.18,
+    "gcs_total": 0.0,
+    "weight_kg": 0.0,
+    "height_cm": 0.0,
+    "bmi": 0.0,
+    "news2_score": 0.0,
+    "num_prior_ed_visits_12m": 0.0,
+    "num_prior_admissions_12m": 0.0,
+    "num_active_medications": 0.0,
+    "num_comorbidities": 0.0
+  },
+  "feature_stats": {
+    "temperature_c": {
+      "n_valid": 79426.0,
+      "min": 35.1,
+      "p25": 37.0,
+      "median": 37.5,
+      "p75": 38.1,
+      "max": 41.8,
+      "mean": 37.631416664568285
+    },
+    "heart_rate": {
+      "n_valid": 80000.0,
+      "min": 30.0,
+      "p25": 78.2,
+      "median": 89.6,
+      "p75": 103.2,
+      "max": 207.7,
+      "mean": 91.85862250000001
+    },
+    "respiratory_rate": {
+      "n_valid": 76933.0,
+      "min": 8.0,
+      "p25": 15.2,
+      "median": 17.3,
+      "p75": 20.3,
+      "max": 51.5,
+      "mean": 18.33385673248151
+    },
+    "spo2": {
+      "n_valid": 80000.0,
+      "min": 60.4,
+      "p25": 94.1,
+      "median": 97.0,
+      "p75": 98.9,
+      "max": 100.0,
+      "mean": 95.79380125
+    },
+    "systolic_bp": {
+      "n_valid": 75854.0,
+      "min": 40.0,
+      "p25": 106.2,
+      "median": 123.1,
+      "p75": 138.3,
+      "max": 226.9,
+      "mean": 121.61259920373348
+    },
+    "diastolic_bp": {
+      "n_valid": 75854.0,
+      "min": 20.0,
+      "p25": 65.5,
+      "median": 75.3,
+      "p75": 84.2,
+      "max": 134.8,
+      "mean": 74.45233870329844
+    },
+    "pain_score": {
+      "n_valid": 80000.0,
+      "min": -1.0,
+      "p25": 2.0,
+      "median": 5.0,
+      "p75": 7.0,
+      "max": 10.0,
+      "mean": 4.505975
+    },
+    "shock_index": {
+      "n_valid": 75854.0,
+      "min": 0.19,
+      "p25": 0.601,
+      "median": 0.724,
+      "p75": 0.92,
+      "max": 4.768,
+      "mean": 0.8100192475017797
+    },
+    "pulse_pressure": {
+      "n_valid": 75854.0,
+      "min": -51.0,
+      "p25": 31.1,
+      "median": 47.2,
+      "p75": 63.4,
+      "max": 163.7,
+      "mean": 47.16026050043505
+    },
+    "age": {
+      "n_valid": 80000.0,
+      "min": 1.0,
+      "p25": 29.0,
+      "median": 48.0,
+      "p75": 67.0,
+      "max": 94.0,
+      "mean": 48.544225
+    },
+    "gcs_total": {
+      "n_valid": 80000.0,
+      "min": 3.0,
+      "p25": 15.0,
+      "median": 15.0,
+      "p75": 15.0,
+      "max": 15.0,
+      "mean": 14.152125
+    }
+  }
+}

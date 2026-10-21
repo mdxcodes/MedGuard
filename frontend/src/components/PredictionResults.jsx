@@ -1,4 +1,4 @@
-import { Shield, AlertTriangle } from 'lucide-react';
+import { Shield, AlertTriangle, ArrowRight, ArrowUpRight } from 'lucide-react';
 import QualityWarnings from './QualityWarnings';
 import UncertaintyIndicators from './UncertaintyIndicators';
 import { PageShell, SectionCard, StatMetric } from '../components/ui/states';
@@ -8,7 +8,7 @@ const LEVEL_LABELS = {
   2: { label: 'High urgency', tone: 'high' },
   3: { label: 'Moderate urgency', tone: 'moderate' },
   4: { label: 'Low urgency', tone: 'low' },
-  5: { label: 'Lowest urgency (absent)', tone: 'absent' },
+  5: { label: 'Lowest urgency', tone: 'lowest' },
 };
 
 const LEVEL_STYLES = {
@@ -16,7 +16,7 @@ const LEVEL_STYLES = {
   high: { bg: 'bg-warning-bg', border: 'border-warning/20', text: 'text-warning', dot: 'bg-warning' },
   moderate: { bg: 'bg-primary-soft', border: 'border-primary/20', text: 'text-primary', dot: 'bg-primary' },
   low: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-secondary', dot: 'bg-secondary/30' },
-  absent: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-muted', dot: 'bg-muted' },
+  lowest: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-secondary', dot: 'bg-secondary/30' },
 };
 
 export default function PredictionResults({ result }) {
@@ -100,8 +100,9 @@ export default function PredictionResults({ result }) {
           })}
         </div>
         <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
-          ESI 5 may have limited support in the synthetic dataset; probabilities for that level may be unreliable.
-          ESI 4 is sparse. These limitations are documented and must not be hidden.
+          All five ESI levels are present in the Triagegeist training cohort. Class frequencies are still
+          imbalanced (ESI 1 is the rarest level), so per-level probabilities for the least common classes
+          are less certain than for the dominant ones. These limitations are documented and must not be hidden.
         </div>
       </SectionCard>
 

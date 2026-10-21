@@ -41,7 +41,7 @@ export default function UncertaintyIndicators({ uncertainty }) {
         <p>
           Higher entropy/margin indicate ambiguity; lower max prob suggests less confident prediction. These describe
           model confidence patterns only—not clinical certainty. Calibration not performed due to small sample size and
-          class imbalance (ESI 4 sparse, ESI 5 absent).
+          class imbalance (ESI 1 is the rarest level).
         </p>
       </div>
     </div>

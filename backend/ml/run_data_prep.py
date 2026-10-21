@@ -6,14 +6,14 @@ Run from the project root:
 
 What this does
 --------------
-1. Verifies SHA-256 checksums for every licensed dataset file.
-2. Loads `triage` and `edstays`, validates schemas, joins them 1:1 on stay_id.
-3. Applies every documented data-quality rule (temperature units, blood
+1. Loads the Triagegeist `train.csv` and joins `patient_history.csv` 1:1 on
+   `patient_id`.
+2. Applies every documented data-quality rule (temperature units, blood
    pressure, pain parsing, chief-complaint normalisation).
-4. Drops rows with no clinician-assigned ESI label.
-5. Splits into patient-grouped train/test sets with overlap assertions.
-6. Fits the leakage-safe preprocessing pipeline on TRAINING rows only.
-7. Writes a machine-readable JSON report and a human-readable Markdown report.
+3. Drops rows with no clinician-assigned ESI label.
+4. Splits into patient-grouped train/test sets with overlap assertions.
+5. Fits the leakage-safe preprocessing pipeline on TRAINING rows only.
+6. Writes a machine-readable JSON report and a human-readable Markdown report.
 
 Out of scope for this phase: model training, evaluation metrics, any clinical
 claim, and any upload of research data.
@@ -56,16 +56,17 @@ def run(
     verbose: bool = False,
 ) -> dict:
     """Execute the full data-preparation pipeline. Returns the report payload."""
-    output_json = output_json or config.REPORTS_DIR / "data_quality_report.json"
+    # Distinct from reports/data_quality_report.json, which is produced by
+    # backend.ml.build_reports and consumed by the frontend dataset explorer.
+    output_json = output_json or config.REPORTS_DIR / "data_preparation_report.json"
     output_markdown = output_markdown or config.DOCS_DIR / "DATA_QUALITY_REPORT.md"
 
     # --- 1. checksums ------------------------------------------------------
     checksum_results = verify_checksums()
-    log.info("Verified %d file checksum(s) against SHA256SUMS.txt.",
-             len(checksum_results))
+    log.info("Checked %d file checksum(s).", len(checksum_results))
 
     # --- 2. load and join --------------------------------------------------
-    joined = load_joined_dataset(verify_checksum=False)
+    joined = load_joined_dataset(verify_checksum=False)["train"]
     log.info("Joined dataset: %d rows, %d patients.",
              len(joined), joined[config.SUBJECT_ID_COLUMN].nunique())
 

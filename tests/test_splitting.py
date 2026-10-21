@@ -12,9 +12,13 @@ from backend.ml.features import build_feature_frame
 from backend.ml.splitting import (
     patient_grouped_split,
     grouped_kfold,
+    stratified_grouped_kfold,
     report_stratification_feasibility,
     assert_no_patient_overlap,
     assert_non_empty,
+    PatientOverlapError,
+    EmptySplitError,
+    SplitError,
 )
 from tests.fixtures import synthetic_labelled_frame
 
@@ -30,7 +34,7 @@ def real_frame():
     """The real cohort, loaded from the joined dataset."""
     from backend.ml.data_loading import load_joined_dataset
 
-    return build_feature_frame(load_joined_dataset())
+    return build_feature_frame(load_joined_dataset()["train"])
 
 
 # ---------------------------------------------------------------------------
@@ -131,15 +135,18 @@ class TestRealCohortSplitting:
         train, test = patient_grouped_split(real_frame, seed=config.RANDOM_SEED)
         assert not (set(train["patient_id"]) & set(test["patient_id"]))
 
-    def test_real_esi5_is_absent_and_stratification_refused(self, real_frame):
+    def test_real_cohort_supports_all_five_levels(self, real_frame):
+        # Triagegeist ships all five ESI levels, so stratified grouping is
+        # feasible on the real cohort.
         report = report_stratification_feasibility(real_frame)
-        assert report["missing_classes"] == [5]
-        assert report["feasible"] is False
-        assert 4 in report["sparse_classes"]
+        assert report["missing_classes"] == []
+        assert report["feasible"] is True
 
     def test_labels_are_never_collapsed(self, real_frame):
         # The five-level target must survive every split unchanged.
-        assert set(real_frame["triage_acuity"].unique()) <= {1.0, 2.0, 3.0, 4.0}
+        observed = set(real_frame["triage_acuity"].unique())
+        assert observed <= {1.0, 2.0, 3.0, 4.0, 5.0}
+        assert observed == {1.0, 2.0, 3.0, 4.0, 5.0}
         assert set(config.ESI_LABELS) == {1, 2, 3, 4, 5}
 
     def test_grouped_kfold_holds_on_real_cohort(self, real_frame):

@@ -265,3 +265,7 @@ STAY_ID_COLUMN = PATIENT_ID_COLUMN
 LEAKAGE_FIELDS = triagegeist_schema.LEAKAGE_FIELDS
 
 from backend.ml import triagegeist_schema
+
+
+#: Canonical internal temperature unit after normalisation.
+TEMPERATURE_UNIT: str = "celsius"

@@ -1,5 +1,11 @@
 # MedGuard — Phase 0: Dataset and Development Environment Audit
 
+> **Superseded — historical record.** This document describes the original
+> MIMIC-IV-ED demo baseline. The primary dataset is now **Triagegeist**
+> (synthetic); see `TRIAGEGEIST_MIGRATION_REPORT.md` and `docs/MODEL_CARD.md`
+> for the current system. The content below is preserved unchanged as the
+> dated record of that phase.
+
 **Project:** MedGuard (Triage One) — AI-assisted emergency triage research prototype
 **Audit date:** 2026-10-15
 **Auditor:** Lead AI/ML engineer

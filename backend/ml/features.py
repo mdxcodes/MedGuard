@@ -227,12 +227,19 @@ def build_preprocessor(
         ]
     )
 
+    # A column that the derive step produces (e.g. shock_index) must not also
+    # be fed in raw: the ColumnTransformer would emit the name twice and
+    # sklearn refuses to build non-unique feature names.
+    numeric_columns = [
+        c for c in config.NUMERIC_TRIAGE_FEATURES if c not in DERIVED_FEATURES
+    ]
+
     encoder = ColumnTransformer(
         transformers=[
             (
                 "num",
                 numeric_branch,
-                list(config.NUMERIC_TRIAGE_FEATURES),
+                numeric_columns,
             ),
             ("derived", numeric_branch, list(DERIVED_FEATURES)),
             ("cat", categorical_branch, list(config.CATEGORICAL_TRIAGE_FEATURES)),
@@ -266,7 +273,7 @@ def build_feature_frame(joined: pd.DataFrame) -> pd.DataFrame:
     cohort before splitting. The cleaning counts are attached to
     ``frame.attrs['cleaning_counts']`` for the quality report.
     """
-    from . import validation
+    from backend.ml import triagegeist_schema, validation
 
     frame = joined.copy()
 
@@ -304,15 +311,28 @@ def build_feature_frame(joined: pd.DataFrame) -> pd.DataFrame:
             counts[key] = counts.get(key, 0) + value
     frame.attrs["cleaning_counts"] = counts
 
+    # The Triagegeist schema is the source of truth for which columns may
+    # enter the model. The config groups are kept as an explicit overlay so
+    # that any column they name is retained even if the schema is extended.
     kept = (
-        list(config.NUMERIC_TRIAGE_FEATURES)
-        + ["pain_score"]
+        list(triagegeist_schema.ALL_FEATURE_COLUMNS)
+        + list(config.NUMERIC_TRIAGE_FEATURES)
         + list(config.CATEGORICAL_TRIAGE_FEATURES)
         + [config.TEXT_FEATURE]
         + list(INDICATOR_FEATURES)
         + [config.SUBJECT_ID_COLUMN, config.TARGET_COLUMN]
     )
-    frame = frame[[c for c in kept if c in frame.columns]].copy()
+    # A column can be listed by more than one group (pain_score is numeric,
+    # chief_complaint_system is both categorical and the text feature); keep
+    # each column exactly once, in first-seen order.
+    deduplicated = list(dict.fromkeys(kept))
+    frame = frame[[c for c in deduplicated if c in frame.columns]].copy()
+
+    # arrival_day is a weekday name in the raw release but a numeric feature
+    # in the schema.
+    from backend.ml.triagegeist_preprocessing import map_arrival_day
+
+    frame = map_arrival_day(frame)
     return frame
 
 

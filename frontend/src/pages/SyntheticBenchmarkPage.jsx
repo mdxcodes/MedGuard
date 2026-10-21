@@ -64,7 +64,7 @@ export default function SyntheticBenchmarkPage() {
             Triagegeist benchmark artifacts are not present in this deployment.
           </p>
           <div className="mt-3 rounded-lg border border-border/50 bg-surface-lift p-3 text-[10px] font-mono text-secondary">
-            Generate the benchmark with `python reports/triagegeist/train_benchmark.py` to populate reports/triagegeist/benchmark_results.json, then restart the backend.
+            Generate the benchmark with `venv/bin/python -m backend.ml.build_reports` to populate the reports directory, then restart the backend.
           </div>
         </SectionCard>
       )}

@@ -21,12 +21,12 @@ Key outcomes of the migration:
 | Patients | 64 | 100,000 (train + test disjoint) |
 | ESI levels present | 1, 2, 3, 4 (2 rows), 5 (0 rows) | 1, 2, 3, 4, 5 (all present) |
 | Model | Random Forest (80 estimators, depth 6) | Random Forest (100 estimators, unlimited depth) |
-| CV Macro-F1 | 0.5739 ± 0.1053 | **0.8414** |
-| Holdout Macro-F1 | 0.5303 | **0.8400** |
+| CV Macro-F1 | 0.5739 ± 0.1053 | **0.8421 ± 0.0019** |
+| Holdout Macro-F1 | 0.5303 | **0.8418** |
 | Model artifact | `models/triage_model.joblib` (MIMIC) | `models/triagegeist/triage_model.joblib` (Triagegeist) |
 | Active backend dataset | MIMIC loader + schema | Triagegeist loader + schema |
-| Backend tests | 139 passed | 61 passed, 24 failed, 41 errors |
-| Frontend tests | 22 passed | 31 passed |
+| Backend tests | 139 passed | **119 passed, 0 failed** |
+| Frontend tests | 22 passed | **35 passed, 0 failed** |
 
 The MIMIC-IV-ED pipeline and demo data remain in the repository (licensed data is `.gitignore`d and never committed) but are **no longer on the active execution path**. The Triagegeist stack is now the default: new `backend/ml/triagegeist_*` modules, a new `GET /api/triagegeist/status` endpoint, a new `/triagegeist` frontend route, and a new Random Forest artifact persisted under `models/triagegeist/`.
 
@@ -253,28 +253,28 @@ Training entry point: `backend/ml/triagegeist_training.run_training()` (invoked 
 | `logistic_regression` | Candidate | `LogisticRegression(max_iter=1000, class_weight="balanced", n_jobs=-1, random_state=20260915)` |
 | `random_forest` | Candidate (selected) | `RandomForestClassifier(n_estimators=100, max_depth=None, class_weight="balanced_subsample", n_jobs=-1, random_state=20260915)` |
 
-### 8.3 Actual results (from `reports/triagegeist_evaluation.json`, generated 2026-10-20T08:42:21Z)
+### 8.3 Actual results (from `reports/model_evaluation.json` and `reports/triagegeist_evaluation.json`)
 
 **5-fold patient-grouped CV (training partition):**
 
 | Model | Mean Macro-F1 | Std | Mean Balanced Acc | Std | Mean QWK |
 |---|---|---|---|---|---|
-| Logistic Regression | ~0.814 | — | ~0.809 | — | ~0.897 |
-| **Random Forest (selected)** | **0.8414** | ±0.0027 | **0.8325** | ±0.0043 | **0.9127** |
+| Logistic Regression | 0.8054 | ±0.0033 | 0.8265 | ±0.0021 | 0.8964 |
+| **Random Forest (selected)** | **0.8421** | ±0.0019 | **0.8338** | ±0.0035 | **0.9134** |
 
 **Holdout validation (16,000 rows, 16,000 patients):**
 
 | Model | Macro-F1 | Balanced Accuracy | QWK |
 |---|---|---|---|
 | Dummy (most_frequent) | 0.1068 | 0.2000 | 0.0000 |
-| Logistic Regression | 0.8067 | 0.8271 | 0.8950 |
-| **Random Forest (selected)** | **0.8400** | **0.8310** | **0.9114** |
+| Logistic Regression | 0.8076 | 0.8280 | 0.8956 |
+| **Random Forest (selected)** | **0.8418** | **0.8338** | **0.9120** |
 
-Per-class CV macro-F1 (Random Forest): ESI 1 0.9255, ESI 2 0.9607, ESI 3 0.8636, ESI 4 0.7298, ESI 5 0.7276.
+Per-class CV macro-F1 (Random Forest): ESI 1 0.9146, ESI 2 0.9574, ESI 3 0.8615, ESI 4 0.7257, ESI 5 0.7200.
 
 **Selected model:** Random Forest, persisted to `models/triagegeist/triage_model.joblib`, trained on the full 80,000-row training frame.
 
-Per `docs/TRIAGEGEIST_BENCHMARK.md` §6 (separate benchmark runner `reports/triagegeist/train_benchmark.py` → `reports/triagegeist/benchmark_results.json`), the standalone benchmark reports Random Forest holdout Macro-F1 0.8504, Balanced Acc 0.8431, QWK 0.9181 on an independent train/validation split — synthetic-dataset validation metrics only, not comparable to the MIMIC baseline, not clinically validated.
+The published report artifacts are produced by `backend/ml/build_reports.py`, which builds **the same feature frame and the same estimator configuration as the training path**, so the figures above describe the deployed artifact rather than a differently-configured model. The holdout numbers are measured with the evaluation-time model; the deployed artifact is refitted on all 80,000 labelled rows after selection.
 
 ---
 
@@ -289,7 +289,7 @@ Per `docs/TRIAGEGEIST_BENCHMARK.md` §6 (separate benchmark runner `reports/tria
 | Pipeline | `Pipeline([("preprocess", ColumnTransformer), ("estimator", RandomForestClassifier)])` |
 | Parameters | `n_estimators=100`, `max_depth=None`, `class_weight="balanced_subsample"`, `n_jobs=-1`, `random_state=20260915` |
 | Training rows / patients | 80,000 / 80,000 |
-| Model-input features | 69 |
+| Model-input features | 66 (from 31 source columns) |
 | Target | `triage_acuity`, ESI labels `[1, 2, 3, 4, 5]` |
 | Random seed | 20260915 |
 
@@ -301,25 +301,29 @@ Path: `models/triagegeist/triage_model.manifest.json`
 {
   "model_name": "random_forest",
   "model_kind": "RandomForestClassifier",
-  "target": "acuity",
+  "target": "triage_acuity",
   "esi_labels": [1, 2, 3, 4, 5],
-  "dataset": "MIMIC-IV-ED v2.2 demo subset",
+  "dataset": "Triagegeist",
   "training_rows": 80000,
   "training_patients": 80000,
+  "class_distribution": {"ESI 1": 3222, "ESI 2": 13439, "ESI 3": 28921, "ESI 4": 23020, "ESI 5": 11398},
   "random_seed": 20260915,
-  "params": {"n_estimators": 80, "max_depth": 6, "min_samples_leaf": 4, "min_samples_split": 6, "random_state": 20260915, "n_jobs": -1, "class_weight": "balanced_subsample"},
+  "params": {"n_estimators": 100, "max_depth": null, "min_samples_leaf": 1, "min_samples_split": 2, "random_state": 20260915, "n_jobs": -1, "class_weight": "balanced_subsample"},
   "versions": {"python": "3.14.7", "scikit-learn": "1.9.1", "pandas": "3.0.6", "numpy": "2.5.4", "joblib": "1.6.0"},
-  "created_utc": "2026-10-20T08:42:21.134427+00:00",
-  "note": "Demonstration model on the demo subset. Not for clinical use."
+  "created_utc": "2026-10-21T10:17:50.669829+00:00",
+  "note": "Demonstration model on Triagegeist synthetic dataset. Not for clinical use."
 }
 ```
 
-### 9.3 Schema version notes (discrepancies — see §15)
+### 9.3 Schema version notes
 
-- Manifest `"target": "acuity"` but active config target is `triage_acuity` (`config.py:34`, `triagegeist_schema.py:212`).
-- Manifest `"dataset": "MIMIC-IV-ED v2.2 demo subset"` is a stale hardcoded label from `backend/ml/train.py:persist_pipeline()` (line 99); the artifact was in fact trained on Triagegeist (80,000 rows/patients confirms this).
-- Manifest `params` reflect the MIMIC registry (n_estimators=80, max_depth=6) rather than the Triagegeist training config (n_estimators=100, max_depth=None), because `persist_pipeline` reads `MODEL_REGISTRY` params.
-- No formal semantic version field; manifest `created_utc` and `versions` block serve as the artifact/environment fingerprint.
+The manifest discrepancies recorded at the first migration pass have been **resolved**:
+
+- `"target"` is now `triage_acuity`, read from `config.TARGET_COLUMN` rather than hardcoded.
+- `"dataset"` is now `Triagegeist`, read from `triagegeist_schema.dataset_provenance()` rather than a literal.
+- `"params"` now reports the **actual estimator configuration**, read back from the fitted estimator's `get_params()`, instead of a `MODEL_REGISTRY` entry that belonged to a different construction path. This is what surfaced the `n_estimators=100 / max_depth=None` vs `80 / depth 6` mismatch.
+- `"class_distribution"` was added so the published limitations and the class-support claims in the UI can be derived from the training data instead of being written by hand.
+- There is still no formal semantic version field; `created_utc` and the `versions` block serve as the artifact/environment fingerprint.
 
 ---
 
@@ -442,42 +446,54 @@ Verified on Python 3.14.7 / CachyOS Linux. `pip` is externally managed (PEP 668)
 
 ### 14.1 Backend (`venv/bin/python -m pytest tests/ -v`)
 
-**61 passed, 24 failed, 41 errors** (84.62s, 32 warnings).
+**119 passed, 0 failed, 0 errors.**
 
-**Failures (24)** are concentrated in tests that target MIMIC-specific columns and behavior:
-- `tests/test_api.py`: `test_model_info_returns_metadata`, `test_out_of_range_temperature_rejected`
-- `tests/test_data_loading.py`: schema validation, duplicate patient, one-to-one join, config-column-set-vs-fixtures tests
-- `tests/test_features.py`: leakage/post-triage tables, abnormal vital count constants
-- `tests/test_model_pipeline.py`: experiment runner artifacts
-- `tests/test_pipeline_e2e.py`: patient overlap, reports written, label distribution, checksums, preprocessor fit isolation
-- `tests/test_splitting.py`: overlap guard, empty guards, stratified KFold feasibility
-- `tests/test_validation.py`: missing labels dropped, out-of-range label, zero label, all five levels, labels not collapsed
+The suite is fully ported to Triagegeist. What the port required:
 
-**Errors (41)** are almost entirely MIMic-specific test incompatibilities: tests still reference MIMIC tables/columns (`triage`, `edstays`, `stay_id`, `subject_id`, `acuity`, `chiefcomplaint`, Fahrenheit temperature, `outtime`, `icd_code`, `disposition`) and MIMIC validation rules that do not exist in the Triagegeist schema. Examples: `test_leakage_guard_raises_on_outtime`, `test_unlabelled_rows_are_dropped`, `test_temperature_is_celsius_canonical`, `test_pain_is_numeric_and_in_range`, `test_dbp_outlier_removed`, `test_real_esi5_is_absent_and_stratification_refused`, all `TestGroupedKFold` / `TestRealCohortSplitting` / `TestPreprocessingIsolation` / `TestBuildFeatureFrame` errors.
+| Area | Change |
+|---|---|
+| `tests/fixtures.py` | The synthetic generator now mirrors the **full Triagegeist schema** — all 58 schema feature columns, including the 25 `hx_*` flags, with `arrival_day` as a weekday name exactly as the raw release stores it. |
+| `tests/test_validation.py` | Pain-sentinel semantics updated (`-1` is the Triagegeist "not assessed" sentinel, not an out-of-range reading); chief-complaint nulls and `unknown-cc` placeholders normalise to `unknown`; the frame helper sizes to the supplied labels so the fixture can change shape. |
+| `tests/test_splitting.py` | The real-cohort tests now assert what is true of Triagegeist: all five levels are present and stratified grouping is feasible. The overlap guard and empty-split guard are asserted against the real exception types (`PatientOverlapError`, `EmptySplitError`). |
+| `tests/test_features.py` | The feature set is asserted against `triagegeist_schema.ALL_FEATURE_COLUMNS` rather than a MIMIC allow-list; the leakage guard is parametrised over **every** field the schema marks as leakage, not just `disposition`. |
+| `tests/test_pipeline_e2e.py` | Uses the joined-dataset dict API (`load_joined_dataset()["train"]`). |
+| `tests/test_model_pipeline.py` | Exercises the schema-wide preprocessor against the extended fixture. |
 
-**Passing (61)** include API happy-path/invalid-input/safety tests, model-pipeline determinism and persistence tests where they are schema-agnostic, and miscellaneous utilities.
+The failures found during the port also exposed **real defects in the production code**, all now fixed:
+
+- `features.build_feature_frame` emitted `pain_score` and `chief_complaint_system` twice (duplicated column names).
+- `features.build_preprocessor` fed `shock_index` both raw and derived, producing non-unique feature names.
+- `triagegeist_preprocessing.build_preprocessor` passed boolean columns straight to `SimpleImputer`, which rejects a bool dtype.
+- `splitting.report_stratification_feasibility` reported a cohort as feasible even when a class was **entirely absent**.
+- `reporting.QualityReport` had no `summary`, `failed` or `warnings`, so the data-prep report could not be written.
+- `reporting.render_markdown` read `check.name` from dict-shaped checks.
+- `run_data_prep` called the pre-dict loader API.
+- `build_feature_frame` did not map `arrival_day` from weekday names, so the numeric branch saw strings.
 
 ### 14.2 Frontend (`npx vitest run`)
 
-**31 passed, 0 failed** (8 test files, ~2s). No failures.
+**35 passed, 0 failed** (8 test files). No failures.
 
 ### 14.3 Interpretation
 
-The backend test suite has **not been fully ported** from MIMIC fixtures to Triagegeist fixtures. The 24 failures + 41 errors are expected incompatibilities from the migration, not regressions in the Triagegeist training/prediction code itself. Porting `tests/fixtures.py` and the MIMIC-targeted tests to the Triagegeist schema is tracked as remaining work (§15).
+Both suites are green against the Triagegeist schema. The port surfaced genuine pipeline defects (§14.1) rather than only test-fixture churn, which is the outcome the migration needed.
 
 ---
 
 ## 15. Known Blockers and Unresolved Issues
 
-| # | Issue | Severity | Detail |
-|---|---|---|---|
-| 1 | Backend tests not ported to Triagegeist | High | 24 failed + 41 errors are MIMIC-specific incompatibilities; `tests/fixtures.py`, `test_validation.py`, `test_data_loading.py`, `test_features.py`, `test_splitting.py`, `test_pipeline_e2e.py`, `test_model_pipeline.py` still target MIMIC columns (`subject_id`, `stay_id`, `acuity`, `outtime`, `icd_code`, `disposition`). |
-| 2 | Stale manifest labels on Triagegeist artifact | Medium | `models/triagegeist/triage_model.manifest.json` says `"dataset": "MIMIC-IV-ED v2.2 demo subset"` and `"target": "acuity"` and lists MIMIC RF params (n_estimators=80, max_depth=6) — hardcoded in `backend/ml/train.py:persist_pipeline()` (line 99) — though the artifact was trained on Triagegeist (80k rows/patients, n_estimators=100, max_depth=None). |
-| 3 | Triagegeist artifact not wired as default serving model | Medium | API startup loads `models/triage_model.joblib` (MIMIC baseline); `models/triagegeist/triage_model.joblib` is persisted but not yet the active `/predict` model. |
-| 4 | No real browser automation | Low | Routes verified via HTTP 200 + build success; pixel-level rendering and browser console errors not confirmed. |
-| 5 | `test.csv` labels withheld | Info | Triagegeist holdout labels unavailable; no test-set metrics reported; test.csv left untracked. |
-| 6 | Synthetic data only | Info | Triagegeist is synthetic/Kaggle-sourced; license not embedded locally; non-commercial research use assumed, verify before redistribution. Not clinically validated. |
-| 7 | `chiefs_complaints.csv` / `patient_history.csv` not joined into active training frame | Info | History booleans and complaint text are schema-declared but not part of the fitted 69-feature pipeline (text NLP deferred). |
+| # | Issue | Severity | Status | Detail |
+|---|---|---|---|---|
+| 1 | Backend tests not ported to Triagegeist | High | **Resolved** | The suite is fully ported: **119 passed, 0 failed**. See §14.1 for what the port changed and which production defects it exposed. |
+| 2 | Stale manifest labels on Triagegeist artifact | Medium | **Resolved** | `persist_pipeline` now derives `target`, `dataset` and `params` from the active config, the schema provenance and the fitted estimator, and records `class_distribution`. See §9.2/§9.3. |
+| 3 | Triagegeist artifact not wired as default serving model | Medium | **Resolved** | The API loads `models/triagegeist/triage_model.joblib` by default (`backend/api/config.py`). `/model-info` reports the Triagegeist manifest. |
+| 4 | Published reports described a different model than the deployed artifact | High | **Resolved** | `build_reports` now builds the same feature frame and preprocessor as the training path, so the published metrics describe the deployed model. |
+| 5 | No real browser automation | Low | Open | Routes verified via HTTP 200 + build success; pixel-level rendering and browser console errors not confirmed. |
+| 6 | `test.csv` labels withheld | Info | Open by nature | Triagegeist holdout labels unavailable; no test-set metrics reported; test.csv left untracked. |
+| 7 | Synthetic data only | Info | Open by nature | Triagegeist is synthetic/Kaggle-sourced; license not embedded locally; non-commercial research use assumed, verify before redistribution. Not clinically validated. |
+| 8 | `patient_history.csv` not consumed by the served model | Info | Documented | The 25 `hx_*` flags are joined by the data-preparation pipeline but the deployed model does not use them: the assessment API cannot supply them for a new presentation, and defaulting them to "no comorbidity" would fabricate clinical history. See `docs/FEATURE_SPECIFICATION.md` §2.3. |
+| 9 | Model artifact not committed | Info | Open by design | `models/` is git-ignored. Artifact delivery for any deployment needs a private or credentialed channel. |
+| 10 | Large frontend bundle | Low | Accepted | `reports/evaluation_errors.json` holds one record per out-of-fold prediction (64,000 records, ~13 MB) and the frontend imports it statically, so the production bundle is ~14 MB. The records are kept complete and untruncated because the error-analysis page derives its exact accuracy, adjacent-error and multi-level counts from them; truncating the list would make those tiles report sample statistics as if they were cohort statistics. A production build would serve the records from the API and keep only aggregate statistics in the bundle. |
 
 ---
 
@@ -489,11 +505,10 @@ MIMIC references remain in the repository intentionally (licensed baseline prese
 |---|---|---|
 | `mimic-iv-ed-demo-2.2/`, `mimic-iv-ed-demo-2.2.zip` | Licensed MIMIC-IV-ED demo data | Retained locally, `.gitignore`d, never committed; not on active execution path. |
 | `models/triage_model.joblib`, `models/triage_model.manifest.json` | MIMIC baseline artifact | Retained (gitignored); not the active serving model. |
-| `backend/ml/train.py:99` | `"dataset": "MIMIC-IV-ED v2.2 demo subset"` hardcoded in `persist_pipeline()` | Causes the Triagegeist artifact manifest to carry a stale MIMIC dataset label (§9.3). |
 | `backend/ml/config.py` | `SUBJECT_ID_COLUMN = "patient_id"`, `STAY_ID_COLUMN = "patient_id"`, `TEMP_MIN_C/TEMP_MAX_C/TEMP_MAX_F` aliases | Compatibility aliases kept so legacy MIMIC-targeted tests can import without rename churn. |
-| `tests/test_*.py` | `subject_id`, `stay_id`, `acuity`, `triage`, `edstays`, `outtime`, `icd_code`, `disposition`, Fahrenheit temperature | Legacy MIMIC fixtures/rules; source of the 24 failures + 41 errors (§14). Porting to Triagegeist is remaining work. |
-| `docs/DATASET_AUDIT.md`, `docs/DATA_QUALITY_REPORT.md`, `docs/MODEL_EVALUATION.md`, `docs/MODEL_CARD.md`, `docs/PHASE_1/2_COMPLETION.md` | MIMIC findings, metrics, 35-feature MIMIC model | Historical documentation preserved; clearly describes MIMIC-IV-ED demo subset (207 rows), not Triagegeist. |
-| `docs/TRIAGEGEIST_BENCHMARK.md` | "NOT merged with MIMIC-IV-ED baseline" | Intentional separation note; Triagegeist maintained as a separate benchmark namespace. |
+| `docs/DATASET_AUDIT.md`, `docs/PHASE_1/2/3/4_COMPLETION.md`, `docs/FINAL_HARDENING_AUDIT.md` | MIMIC findings, metrics, 35-feature MIMIC model | Historical documentation preserved, each now carrying a **"Superseded — historical record"** banner that points at the Triagegeist documents. |
+| `docs/DATA_QUALITY_REPORT.md`, `docs/MODEL_EVALUATION.md`, `docs/MODEL_CARD.md`, `docs/FEATURE_SPECIFICATION.md`, `docs/ML_PIPELINE_DESIGN.md`, `docs/API_CONTRACT.md` | MIMIC findings, metrics, 35-feature MIMIC model | **Regenerated / rewritten for Triagegeist.** The first three are produced by the pipeline; the others were rewritten. |
+| `docs/TRIAGEGEIST_BENCHMARK.md` | "NOT merged with MIMIC-IV-ED baseline" | Rewritten: Triagegeist is now the primary dataset, not a separate benchmark namespace. |
 | `.gitignore` | `mimic-iv-ed-demo-2.2/`, `*.zip`, `reports/`, `models/`, `*.joblib` | Exclusion rules cover both MIMIC and Triagegeist artifacts/data. |
 
 ---

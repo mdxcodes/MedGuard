@@ -20,18 +20,25 @@
 
 ```json
 {
-  "subject_id": "demo-001",
-  "temperature": 98.6,
-  "heartrate": 88.0,
-  "resprate": 16.0,
-  "o2sat": 98.0,
-  "sbp": 120.0,
-  "dbp": 80.0,
-  "pain": 3.0,
-  "arrival_transport": "AMBULANCE",
-  "chiefcomplaint": "CHEST PAIN"
+  "patient_id": "demo-001",
+  "temperature_c": 37.0,
+  "heart_rate": 88.0,
+  "respiratory_rate": 16.0,
+  "spo2": 98.0,
+  "systolic_bp": 120.0,
+  "diastolic_bp": 80.0,
+  "pain_score": 3.0,
+  "arrival_mode": "AMBULANCE",
+  "chief_complaint_system": "Cardiovascular",
+  "age": 45.0,
+  "sex": "F"
 }
 ```
+
+Every field is optional. A missing vital is treated as informative: it is
+imputed with the training median and flagged with a missingness indicator
+rather than rejected. `patient_id` is an opaque debug label and must never
+carry real patient PII.
 
 - All fields optional except nothing required by schema.
 - Numeric fields validated against clinical envelopes (`backend/ml/config.py`).
@@ -95,10 +102,10 @@ If the artifact or manifest is missing / incompatible / fails sanity check, the 
 
 - **Disclaimer:** Included in every `/predict` response (`disclaimer` field) and in `/model-info` (`note` field).
 - **No clinical claim:** Schema documentation explicitly states "Not clinically validated."
-- **No real identifiers required:** `subject_id` is optional; if provided it is synthetic/non-identifying (`demo-001` style). No PII is persisted or logged.
+- **No real identifiers required:** `patient_id` is optional; if provided it is synthetic/non-identifying (`demo-001` style). No PII is persisted or logged.
 - **No data persistence:** Assessment request bodies are never written to disk, database, or analytics.
 - **No sensitive-value logging:** `inference.py` no longer logs full request bodies (fixed in Phase 3).
-- **Synthetic only:** All tests and demo examples use `tests/fixtures.py` synthetic fixtures, never real MIMIC records.
+- **Synthetic only:** All tests and demo examples use `tests/fixtures.py` synthetic fixtures, never real patient records.
 - **No artifact / secret exposure:** Stack traces, env vars, model paths, and dataset paths never appear in API responses.
 
 ---
@@ -133,9 +140,9 @@ Status codes:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MEDGUARD_MODEL_PATH` | `models/triage_model.joblib` | Path to saved pipeline |
-| `MEDGUARD_MANIFEST_PATH` | `models/triage_model.manifest.json` | Path to manifest JSON |
-| `MEDGUARD_DATA_ROOT` | `mimic-iv-ed-demo-2.2` | Licensed dataset root (used only by loader for sanity check; never exposed) |
+| `MEDGUARD_MODEL_PATH` | `models/triagegeist/triage_model.joblib` | Path to saved pipeline |
+| `MEDGUARD_MANIFEST_PATH` | `models/triagegeist/triage_model.manifest.json` | Path to manifest JSON |
+| `MEDGUARD_DATA_ROOT` | `triagegeist` | Synthetic dataset root (used only by the loader; never exposed) |
 | `MEDGUARD_ALLOW_FOREIGN_ORIGIN` | `0` | CORS foreign-origin permit |
 
 ---

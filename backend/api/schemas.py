@@ -158,8 +158,9 @@ class ModelInfoResponse(BaseModel):
     limitations: list[str] = Field(
         default_factory=lambda: [
             "Synthetic dataset only.",
-            "ESI Level 5 may have limited support; predictions for that class "
-            "may be unreliable.",
+            "All five ESI levels are present in the training cohort, but the "
+            "rarest level (ESI 1) has far fewer examples than the dominant "
+            "ones, so its predictions are the least certain.",
             "This model is a research prototype and is NOT clinically validated.",
             "Not suitable for real clinical triage decisions.",
         ]

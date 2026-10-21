@@ -48,7 +48,7 @@ export default function MethodologyPage() {
           <li><strong>Not clinically validated.</strong> This is an educational demonstration only.</li>
           <li><strong>Synthetic dataset.</strong> Results are from synthetic Triagegeist data; not representative of real patient populations.</li>
           <li><strong>Small cohort.</strong> 80,000 training visits demonstrates methodology; generalization to real EDs is limited.</li>
-          <li><strong>ESI 5 may be sparse.</strong> If ESI 5 has few labelled examples, per-class metrics are unstable.</li>
+          <li><strong>Rare levels are less certain.</strong> All five ESI levels are present, but the rarest level has fewer examples, so its per-class metrics are the least stable.</li>
           <li><strong>Probabilities not calibrated.</strong> Not suitable for clinical probability estimation.</li>
         </ul>
       </SectionCard>

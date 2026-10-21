@@ -61,33 +61,108 @@ def assert_no_patient_overlap(
     val_set = set(val_pids)
     overlap = train_set & val_set
     if overlap:
-        raise ValueError(
+        raise PatientOverlapError(
             f"Patient overlap detected in {context}: "
-            f"{len(overlap)} patient(s) in both sets: {sorted(overlap)[:10]}"
+            f"{len(overlap)} patient(s) appear in BOTH the training and the "
+            f"test sets: {sorted(overlap)[:10]}"
         )
 
 
-def report_stratification_feasibility(df: pd.DataFrame) -> dict[str, Any]:
+def report_stratification_feasibility(
+    df: pd.DataFrame, n_splits: int | None = None
+) -> dict[str, Any]:
     """Report stratification feasibility for a dataframe."""
     from collections import Counter
 
     counts = Counter(df[triagegeist_schema.TARGET_COLUMN])
     min_count = min(counts.values()) if counts else 0
-    n_splits = config.N_SPLITS
-    feasible = min_count >= n_splits
+    n_splits = n_splits or config.N_SPLITS
+
+    class_counts = {f"ESI {int(k)}": v for k, v in sorted(counts.items())}
+    missing_classes = [
+        f"ESI {int(level)}"
+        for level in triagegeist_schema.ESI_LABELS
+        if f"ESI {int(level)}" not in class_counts
+    ]
+    sparse_classes = [
+        name for name, count in class_counts.items() if 0 < count < n_splits
+    ]
+
+    # Stratification is only possible when every class is present *and* every
+    # class has at least one member per fold. A class that is absent entirely
+    # cannot be represented, however well populated the others are.
+    feasible = min_count >= n_splits and not missing_classes
 
     return {
-        "class_counts": {f"ESI {int(k)}": v for k, v in sorted(counts.items())},
+        "class_counts": class_counts,
         "min_class_count": min_count,
         "n_splits": n_splits,
+        "feasible": feasible,
         "stratification_feasible": feasible,
+        "missing_classes": missing_classes,
+        "sparse_classes": sparse_classes,
         "recommendation": (
             "Sufficient samples per class for stratified grouping"
             if feasible
-            else f"Minimum class count ({min_count}) < n_splits ({n_splits}); "
-            "stratified grouping may produce empty folds."
+            else (
+                f"Missing classes ({', '.join(missing_classes)}); "
+                if missing_classes
+                else ""
+            )
+            + (
+                f"Minimum class count ({min_count}) < n_splits ({n_splits}); "
+                "stratified grouping may produce empty folds."
+                if min_count < n_splits
+                else "Stratified grouping is not possible with absent classes."
+            )
         ),
     }
+
+
+
+def stratified_grouped_kfold(
+    df: pd.DataFrame,
+    n_splits: int = config.N_SPLITS,
+    seed: int = config.RANDOM_SEED,
+) -> Iterator[tuple[pd.DataFrame, pd.DataFrame]]:
+    """Yield stratified, patient-grouped folds.
+
+    Stratification and patient grouping can conflict: a patient with several
+    visits may carry more than one label, so no fold assignment can satisfy
+    both constraints perfectly. When a class has fewer rows than there are
+    folds, this raises :class:`SplitError` rather than silently collapsing
+    the label and producing a misleading score.
+    """
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    report = report_stratification_feasibility(df, n_splits=n_splits)
+    if not report["feasible"]:
+        raise SplitError(
+            "Stratified grouped k-fold is infeasible for this cohort: "
+            f"{report['recommendation']}"
+        )
+
+    y = df[triagegeist_schema.TARGET_COLUMN].values
+    groups = df[triagegeist_schema.PATIENT_ID_COLUMN].values
+    splitter = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    for train_idx, val_idx in splitter.split(df, y, groups):
+        yield df.iloc[train_idx].reset_index(drop=True), df.iloc[val_idx].reset_index(drop=True)
+
+
+def splits_are_reproducible(
+    df: pd.DataFrame,
+    test_size: float = config.TEST_SIZE,
+    seed: int = config.RANDOM_SEED,
+) -> bool:
+    """Return True when the same seed yields an identical patient-grouped split."""
+    first_train, first_test = patient_grouped_split(df, test_size=test_size, seed=seed)
+    second_train, second_test = patient_grouped_split(df, test_size=test_size, seed=seed)
+    return (
+        first_train[triagegeist_schema.PATIENT_ID_COLUMN].tolist()
+        == second_train[triagegeist_schema.PATIENT_ID_COLUMN].tolist()
+        and first_test[triagegeist_schema.PATIENT_ID_COLUMN].tolist()
+        == second_test[triagegeist_schema.PATIENT_ID_COLUMN].tolist()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +186,9 @@ def assert_non_empty(train: pd.DataFrame | list, val: pd.DataFrame | list) -> No
     train_n = len(train) if hasattr(train, "__len__") else len(list(train))
     val_n = len(val) if hasattr(val, "__len__") else len(list(val))
     if train_n == 0:
-        raise EmptySplitError("Training split is empty.")
+        raise EmptySplitError("The training side is empty.")
     if val_n == 0:
-        raise EmptySplitError("Validation/test split is empty.")
+        raise EmptySplitError("The test side is empty.")
 
 
 if __name__ == "__main__":

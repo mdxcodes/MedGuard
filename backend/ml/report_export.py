@@ -31,8 +31,8 @@ ARTIFACTS = {
     "dq": config.REPORTS_DIR / "data_quality_report.json",
     "errors": config.REPORTS_DIR / "evaluation_errors.json",
     "global_shap": config.REPORTS_DIR / "global_shap.json",
-    "training_stats": config.REPORTS_DIR / "training_distribution_stats.json",
-    "manifest": config.PROJECT_ROOT / "models" / "triage_model.manifest.json",
+    "training_stats": config.REPORTS_DIR / "triagegeist_training_stats.json",
+    "manifest": config.PROJECT_ROOT / "models" / "triagegeist" / "triage_model.manifest.json",
 }
 
 

@@ -25,14 +25,14 @@ Open: http://127.0.0.1:5173/
 ## 2. Demonstration Sequence
 
 1. **Overview (`/`)** — Project identity, research disclaimer, synthetic-only notice.
-2. **Assessment (`/assessment`)** — Enter synthetic vitals (e.g. temp 98.6, HR 88, RR 16, O2 98, SBP 120, DBP 80, pain 3, transport AMBULANCE, complaint CHEST PAIN). Submit → real model inference via `POST /api/predict`.
+2. **Assessment (`/assessment`)** — Enter synthetic vitals (e.g. temp 37.0, HR 88, RR 16, O2 98, SBP 120, DBP 80, pain 3, age 45, arrival AMBULANCE, complaint Cardiovascular). Submit → real model inference via `POST /api/predict`.
 3. **Prediction (`/prediction`)** — View real predicted ESI level, class probabilities (all 5 levels), max probability, SHAP explanation, research disclaimer.
 4. **Performance (`/performance`)** — Verified CV and holdout metrics, confusion matrix, per-class table, limitations panel.
-5. **Dataset Explorer (`/dataset`)** — Aggregate MIMIC-IV-ED demo stats, class distribution, missingness, preprocessing transparency, limitations.
+5. **Dataset Explorer (`/dataset`)** — Aggregate Triagegeist stats, class distribution, missingness, preprocessing transparency, limitations.
 6. **Scenario Comparison (`/compare`)** — Two independent synthetic assessments submitted to the real API; side-by-side results.
 7. **Error Analysis (`/errors`)** — Out-of-fold error categories, filters, detail view.
 8. **Explainability (`/explain`)** — Global SHAP feature importance (mean |SHAP|), methodology, limitations.
-9. **Triagegeist Benchmark (`/triagegeist`)** — Separate synthetic benchmark: dataset profile, model results table, ESI class distribution, synthetic-data disclaimer.
+9. **Triagegeist Benchmark (`/triagegeist`)** — Dataset profile, model results table, ESI class distribution, synthetic-data disclaimer.
 10. **Model Registry (`/registry`)** — Active model version + integrity status.
 11. **Experiments (`/experiments`)** — Experiment submission + history.
 12. **Drift (`/drift`)** — Drift analysis placeholder.
@@ -40,15 +40,15 @@ Open: http://127.0.0.1:5173/
 ## 3. Expected Behavior
 
 - Every route renders without a blank screen.
-- `/predict` returns real model output (not hardcoded), with ESI probabilities summing to ~1 and ESI 5 = 0.0 (absent class).
+- `/predict` returns real model output (not hardcoded), with ESI probabilities summing to ~1 across all five levels.
 - Invalid inputs return structured validation errors (no stack traces).
 - Missing optional artifacts (e.g. global SHAP) show "unavailable" states, not crashes.
 - All disclaimers visible: "Not clinically validated. Educational research only."
 
 ## 4. Known Limitations
 
-- ESI 4 has only 2 labeled examples; ESI 5 has 0 in the MIMIC demo → those metrics are unstable / not learnable.
-- Triagegeist is a separate synthetic benchmark; its metrics are not comparable to MIMIC.
+- All five ESI levels are present in Triagegeist. ESI 1 is the rarest (4.0% of the cohort), so its per-class metrics are the least stable.
+- The metrics are measured on synthetic data only. They are not comparable to any earlier MIMIC-IV-ED demo figures and they do not establish clinical validity.
 - No real browser automation was used to confirm pixel-level rendering (routes verified via HTTP 200 + build success).
 - No deployment to a hosted environment performed.
 

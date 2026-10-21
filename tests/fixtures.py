@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from backend.ml import config, features
+from backend.ml import config, features, triagegeist_schema
 
 
 TRIAGE_COLUMNS = [
@@ -93,33 +93,64 @@ def synthetic_labelled_frame(n_patients: int = 20, seed: int = 0) -> pd.DataFram
     )
     acuity = rng.choice([1.0, 2.0, 3.0], size=len(subject_ids), p=[0.2, 0.5, 0.3])
 
+    n = len(subject_ids)
+    heart_rate = rng.integers(60, 130, n).astype(float)
+    systolic_bp = rng.integers(100, 170, n).astype(float)
+    diastolic_bp = rng.integers(60, 100, n).astype(float)
+    weight_kg = rng.uniform(45.0, 110.0, n)
+    height_cm = rng.uniform(150.0, 195.0, n)
+    temperature_c = rng.uniform(36.0, 39.0, n)
+
     frame = pd.DataFrame(
         {
             "patient_id": subject_ids,
             "triage_acuity": acuity,
-            "heart_rate": rng.integers(60, 130, len(subject_ids)).astype(float),
-            "respiratory_rate": rng.integers(12, 24, len(subject_ids)).astype(float),
-            "temperature_c": rng.uniform(36.0, 39.0, len(subject_ids)),
-            "spo2": rng.integers(92, 100, len(subject_ids)).astype(float),
-            "systolic_bp": rng.integers(100, 170, len(subject_ids)).astype(float),
-            "diastolic_bp": rng.integers(60, 100, len(subject_ids)).astype(float),
-            "pain_score": rng.integers(0, 10, len(subject_ids)).astype(float),
-            "arrival_mode": rng.choice(["AMBULANCE", "WALK IN"], size=len(subject_ids)),
+            "heart_rate": heart_rate,
+            "respiratory_rate": rng.integers(12, 24, n).astype(float),
+            "temperature_c": temperature_c,
+            "spo2": rng.integers(92, 100, n).astype(float),
+            "systolic_bp": systolic_bp,
+            "diastolic_bp": diastolic_bp,
+            "pain_score": rng.integers(0, 10, n).astype(float),
+            "arrival_mode": rng.choice(["AMBULANCE", "WALK IN"], size=n),
             "chief_complaint_system": rng.choice(
                 ["Cardiovascular", "Respiratory", "Neurological", "Abdominal", "Trauma"],
-                size=len(subject_ids),
+                size=n,
             ),
-            "age": rng.integers(18, 90, len(subject_ids)).astype(float),
-            "sex": rng.choice(["M", "F", "Other"], size=len(subject_ids)),
-            "insurance_type": rng.choice(["Private", "Medicare", "Medicaid"], size=len(subject_ids)),
-            "arrival_hour": rng.integers(0, 24, len(subject_ids)).astype(float),
-            "shock_index": rng.uniform(0.5, 1.5, len(subject_ids)),
-            "num_prior_ed_visits_12m": rng.integers(0, 10, len(subject_ids)).astype(float),
-            "num_active_medications": rng.integers(0, 10, len(subject_ids)).astype(float),
-            "hx_hypertension": rng.choice([True, False], size=len(subject_ids)),
-            "hx_diabetes_type2": rng.choice([True, False], size=len(subject_ids)),
+            "age": rng.integers(18, 90, n).astype(float),
+            "sex": rng.choice(["M", "F", "Other"], size=n),
+            "language": rng.choice(["English", "Finnish", "Russian"], size=n),
+            "insurance_type": rng.choice(["Private", "Medicare", "Medicaid"], size=n),
+            "transport_origin": rng.choice(["home", "public_space", "nursing_home"], size=n),
+            "arrival_hour": rng.integers(0, 24, n).astype(float),
+            "arrival_day": rng.choice(
+                [
+                    "Monday", "Tuesday", "Wednesday",
+                    "Thursday", "Friday", "Saturday", "Sunday",
+                ],
+                size=n,
+            ),
+            "arrival_month": rng.integers(1, 13, n).astype(float),
+            "arrival_season": rng.choice(
+                ["spring", "summer", "autumn", "winter"], size=n
+            ),
+            "shift": rng.choice(["morning", "afternoon", "night"], size=n),
+            "shock_index": heart_rate / systolic_bp,
+            "pulse_pressure": systolic_bp - diastolic_bp,
+            "mean_arterial_pressure": (systolic_bp + 2 * diastolic_bp) / 3,
+            "gcs_total": rng.integers(3, 16, n).astype(float),
+            "weight_kg": weight_kg,
+            "height_cm": height_cm,
+            "bmi": weight_kg / (height_cm / 100.0) ** 2,
+            "news2_score": rng.integers(0, 15, n).astype(float),
+            "num_prior_ed_visits_12m": rng.integers(0, 10, n).astype(float),
+            "num_prior_admissions_12m": rng.integers(0, 5, n).astype(float),
+            "num_active_medications": rng.integers(0, 10, n).astype(float),
+            "num_comorbidities": rng.integers(0, 10, n).astype(float),
         }
     )
+    for column in triagegeist_schema.BOOLEAN_FEATURE_COLUMNS:
+        frame[column] = rng.choice([True, False], size=n)
     # Introduce known missingness.
     for column in ("temperature_c", "heart_rate", "pain_score"):
         frame.loc[rng.random(len(frame)) < 0.1, column] = np.nan

@@ -86,7 +86,7 @@ export default function ExplainabilityPage() {
             <ul className="space-y-2 text-sm text-secondary leading-relaxed">
               <li>Reference set is the held-out test split (n={report?.n_reference_samples ?? 0}) from patient-grouped evaluation — small sample sizes introduce uncertainty.</li>
               <li>Engineered features (shock_index, pulse_pressure, MAP) appear alongside raw vitals; TF-IDF complaint tokens and one-hot transport are included.</li>
-              <li>ESI 4 is sparse and ESI 5 absent in the demo dataset — these constraints affect what the model can learn.</li>
+              <li>All five ESI levels are present in the Triagegeist cohort; the rarest level (ESI 1) is learned less confidently than the dominant ones.</li>
               <li>SHAP indicates feature sensitivity, not medical causation.</li>
             </ul>
           </SectionCard>

@@ -1,5 +1,11 @@
 # MedGuard — Phase 3 Completion Report
 
+> **Superseded — historical record.** This document describes the original
+> MIMIC-IV-ED demo baseline. The primary dataset is now **Triagegeist**
+> (synthetic); see `TRIAGEGEIST_MIGRATION_REPORT.md` and `docs/MODEL_CARD.md`
+> for the current system. The content below is preserved unchanged as the
+> dated record of that phase.
+
 **Phase:** 3 — Production-Structured ML Inference API (FastAPI backend)  
 **Status:** Complete  
 **Date:** 2026-10-17  

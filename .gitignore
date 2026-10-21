@@ -39,7 +39,17 @@ data/raw/
 # Pipeline output derived from licensed research data. Reproducible at any
 # time with `venv/bin/python -m backend.ml.run_data_prep`; only the aggregate
 # Markdown report under docs/ is committed.
-reports/
+reports/*
+
+# --- Aggregate research artifacts consumed by the frontend -----------------
+# These are statistics only (counts, distributions, metrics, feature
+# importances). They contain no patient identifiers, no raw clinical rows and
+# no chief-complaint free text, so they are safe to publish and are required
+# for `npm run build` to succeed on a fresh clone. Regenerate with:
+#   venv/bin/python -m backend.ml.build_reports
+!reports/*.json
+!reports/triagegeist/
+!reports/triagegeist/*.json
 
 # --- Python virtual environments -------------------------------------------
 venv/

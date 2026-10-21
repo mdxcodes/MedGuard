@@ -49,7 +49,7 @@ export default function DatasetExplorerPage() {
           })}
         </div>
         <div className="mt-4 pt-3 border-t border-border text-[11px] font-mono text-muted leading-relaxed">
-          ESI 4 may be sparse; ESI 5 may have few or zero examples — per-class metrics for those levels are unstable.
+          All five ESI levels are represented; the rarest level (ESI 1) has comparatively few examples, so its per-class metrics are the least stable.
         </div>
       </SectionCard>
 
@@ -142,9 +142,9 @@ export default function DatasetExplorerPage() {
         <div className="lg:col-span-5">
           <SectionCard title="Class imbalance & limitations" badge="Read first" icon={<AlertTriangle className="w-4 h-4" />}>
             <ul className="space-y-2 text-sm text-warning-foreground leading-relaxed">
-              <li><strong className="text-primary">Severe imbalance:</strong> ESI 2 and ESI 3 dominate; ESI 1 is sparse.</li>
-              <li><strong className="text-primary">Sparse class:</strong> ESI 4 has few examples — per-class metrics unstable.</li>
-              <li><strong className="text-primary">Absent class:</strong> ESI 5 may have 0 labelled rows — probabilities always 0.0.</li>
+              <li><strong className="text-primary">Severe imbalance:</strong> ESI 3 dominates the cohort.</li>
+              <li><strong className="text-primary">Rarest class:</strong> ESI 1 has the fewest examples — per-class metrics are least stable there.</li>
+              <li><strong className="text-primary">All levels present:</strong> every ESI level from 1 to 5 has labelled examples, so no level is structurally unlearnable.</li>
               <li><strong className="text-primary">Synthetic cohort:</strong> {formatNumber(total)} visits demonstrates methodology, not clinical performance.</li>
               <li><strong className="text-primary">Not clinically validated:</strong> Research prototype only.</li>
             </ul>

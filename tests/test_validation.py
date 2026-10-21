@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backend.ml import config
+from backend.ml import config, validation
 from backend.ml.validation import DataQualityError, clean_triage_frame
 from tests.fixtures import synthetic_labelled_frame
 
@@ -153,9 +153,17 @@ class TestPainParsing:
         assert counts["pain_out_of_range"] == 1
 
     def test_negative_pain_is_rejected(self):
+        # Triagegeist encodes "pain not assessed" as a negative sentinel, so a
+        # negative value is missingness rather than an out-of-range reading.
         result, counts = validation.parse_pain(pd.Series([-2]))
         assert bool(result.isna().iloc[0])
-        assert counts["pain_out_of_range"] == 1
+        assert counts["pain_unassessable"] == 1
+        assert counts["pain_out_of_range"] == 0
+
+    def test_minus_one_sentinel_is_unassessable(self):
+        result, counts = validation.parse_pain(pd.Series([-1]))
+        assert bool(result.isna().iloc[0])
+        assert counts["pain_unassessable"] == 1
 
     @pytest.mark.parametrize("token", ["Critical", "o", "ett", "abc"])
     def test_unrecognised_tokens_become_missing(self, token):
@@ -226,7 +234,9 @@ class TestTargetValidation:
     def _frame(self, acuity_values):
         from tests.fixtures import synthetic_labelled_frame
 
-        frame = synthetic_labelled_frame().copy()
+        # Size the frame to the supplied labels so the fixture can change
+        # shape without breaking these assertions.
+        frame = synthetic_labelled_frame().head(len(acuity_values)).copy()
         frame[config.TARGET_COLUMN] = acuity_values
         return frame
 

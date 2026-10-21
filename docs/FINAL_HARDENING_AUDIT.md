@@ -1,5 +1,11 @@
 # MedGuard — Final Hardening Audit
 
+> **Superseded — historical record.** This document describes the original
+> MIMIC-IV-ED demo baseline. The primary dataset is now **Triagegeist**
+> (synthetic); see `TRIAGEGEIST_MIGRATION_REPORT.md` and `docs/MODEL_CARD.md`
+> for the current system. The content below is preserved unchanged as the
+> dated record of that phase.
+
 **Repository:** /secondary/MedGuard  
 **Branch:** main  
 **Commit:** 371dad3  
