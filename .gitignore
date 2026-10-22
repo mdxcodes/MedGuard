@@ -12,6 +12,10 @@
 mimic-iv-ed-demo-2.2/
 mimic-iv-ed-demo-2.2.zip
 mimic-iv-ed-*/
+# The Triagegeist synthetic dataset. It is redistributed under third-party
+# terms, so it is obtained separately (see docs/DEPLOYMENT_FIX.md) rather than
+# committed here. Only the aggregate reports derived from it are tracked.
+triagegeist/
 *.zip
 *.tar
 *.tar.gz
@@ -63,6 +67,10 @@ venv.bak/
 
 # --- Python build / cache artifacts ----------------------------------------
 __pycache__/
+
+# --- Tool caches (regenerated on every install/build) -----------------------
+.vite/
+frontend/.vite/
 *.py[cod]
 *$py.class
 *.so

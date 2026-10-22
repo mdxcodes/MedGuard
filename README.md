@@ -70,16 +70,15 @@ in `DUAL_MODE_UI_IMPLEMENTATION_REPORT.md`.
 │   ├── dist/                 # Production build output
 │   ├── vitest.config.js      # jsdom test environment
 │   └── package.json
-├── triagegeist/              # Triagegeist synthetic dataset (CSV files)
+├── triagegeist/              # Triagegeist dataset — NOT committed (see below)
 │   ├── train.csv             # 80,000 labelled visits
 │   ├── test.csv              # 20,000 unlabelled visits (holdout)
 │   ├── chief_complaints.csv  # Chief complaint text
 │   ├── patient_history.csv   # Patient history comorbidities
 │   └── sample_submission.csv # Competition submission template
-├── models/
-│   └── triagegeist/          # Model artifacts
-│       ├── triagegeist/
-│       │   ├── triage_model.joblib
+├── models/                   # Model artifacts — NOT committed (~250 MB)
+│   └── triagegeist/
+│       ├── triage_model.joblib
 │       └── triage_model.manifest.json
 ├── reports/                  # Evaluation artifacts
 │   ├── model_evaluation.json       # Holdout + CV evaluation
@@ -108,6 +107,20 @@ in `DUAL_MODE_UI_IMPLEMENTATION_REPORT.md`.
 ```
 
 ## Quick Start
+
+### Not in Git
+
+Two directories are deliberately **untracked** — they are in `.gitignore` and
+are not part of the repository history:
+
+| Path | Why | How to obtain it |
+|---|---|---|
+| `triagegeist/` (36 MB) | The Triagegeist dataset is redistributed under third-party terms, so it is not redistributed here. | Obtain the dataset from the Kaggle competition and place it at `triagegeist/`. |
+| `models/` (~250 MB) | The trained artifact exceeds GitHub's 100 MB per-file limit. | `venv/bin/python -m backend.ml.triagegeist_training`, or download it at startup with `MEDGUARD_MODEL_URL` — see `docs/RENDER_DEPLOYMENT_FIX.md`. |
+
+Everything else in the tree is tracked, including the aggregate evaluation
+reports under `reports/`, which contain statistics only (no patient
+identifiers and no raw clinical rows).
 
 ### Backend (FastAPI)
 

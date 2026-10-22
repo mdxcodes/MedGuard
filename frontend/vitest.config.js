@@ -26,5 +26,11 @@ export default defineConfig({
     // takes longer than the default per-test budget.
     testTimeout: 30000,
     hookTimeout: 30000,
+    env: {
+      // Tests must not depend on a developer's local frontend/.env. The API
+      // client resolves VITE_API_BASE_URL at import time, so a local value
+      // would otherwise change every request URL under test.
+      VITE_API_BASE_URL: '',
+    },
   },
 });

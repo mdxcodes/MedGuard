@@ -1,4 +1,54 @@
-fastapi>=0.115,<1.0
-uvicorn[standard]>=0.30,<1.0
-pydantic>=2.7,<3.0
-python-dotenv>=1.0,<2.0
+# ---------------------------------------------------------------------------
+# MedGuard (Triage One) — CANONICAL PRODUCTION DEPENDENCIES
+#
+# This is the file Render installs:
+#     pip install --no-cache-dir -r backend/requirements.txt
+#
+# It contains EVERY runtime dependency of the FastAPI service, including the
+# complete ML stack. The service imports numpy/pandas/scikit-learn at
+# request time (backend/api/inference.py imports numpy at module scope), so a
+# web-framework-only file makes the service fail at import with
+# "ModuleNotFoundError: No module named 'numpy'".
+#
+# The repository-root requirements.txt references this file and adds the
+# test-only dependencies, so there is exactly ONE place where the production
+# version pins live.
+#
+# VERSION RATIONALE
+# The ML stack (numpy/pandas/scipy/scikit-learn/joblib/cloudpickle/shap) is
+# pinned exactly: the deployed model is a serialized scikit-learn pipeline, and
+# the artifact was produced by these exact versions. Changing a pin can make
+# an existing .joblib artifact unloadable, so these are not upgraded casually.
+#
+# The web stack (fastapi/uvicorn/pydantic/python-dotenv) is pinned to the
+# versions this repository was verified against, for the same reason: an
+# untested resolution on Render is an outage you discover in production.
+#
+# PYTHON RUNTIME
+# Verified on CPython 3.14.8 (see .python-version). Every pin below
+# publishes a cp314 manylinux wheel, so no source build is required on
+# Render's Linux image.
+# ---------------------------------------------------------------------------
+
+# --- Web framework ---------------------------------------------------------
+fastapi==0.143.3
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+python-dotenv==1.2.4
+# Used by the API to fetch the model artifact from remote storage at startup.
+httpx==0.28.1
+
+# --- Core data handling (required at import time by the API) ----------------
+numpy==2.5.4
+pandas==3.0.6
+scipy==1.18.1
+
+# --- Machine learning (the serialized pipeline must be able to load) --------
+scikit-learn==1.9.1
+joblib==1.6.0
+cloudpickle==3.1.2
+
+# --- Explainability (the /predict response includes SHAP attributions) ------
+shap==0.53.0
+slicer==0.0.8
+threadpoolctl==3.7.0

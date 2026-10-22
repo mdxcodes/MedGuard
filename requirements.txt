@@ -1,43 +1,24 @@
 # ---------------------------------------------------------------------------
-# MedGuard (Triage One) — Python dependencies
+# MedGuard (Triage One) — development / full dependency set
 #
 # Install with:  venv/bin/pip install -r requirements.txt
 #
-# PYTHON COMPATIBILITY NOTE (verified 2026-10-15):
-# All pins below were installed and import-tested successfully on Python
-# 3.14.7 under CachyOS Linux (Arch-based rolling release). No dependency
-# failed to build or import, so a Python 3.12 fallback environment is NOT
-# required for this phase. If a future dependency upgrade fails on 3.14,
-# create a Python 3.12 venv and record that here — do NOT destabilize the
-# system Python.
+# The production runtime dependencies live in backend/requirements.txt, which
+# is the file Render installs. They are pulled in here so that:
 #
-# Versions are exact (==) pins so that the data-preparation pipeline is
-# bit-for-bit reproducible across machines.
+#   * `pip install -r requirements.txt` still gives a complete environment,
+#   * the ML version pins exist in exactly ONE place, and
+#   * the root file cannot drift out of sync with what is deployed.
+#
+# Do not add production packages here — add them to
+# backend/requirements.txt, which is the canonical production file.
 # ---------------------------------------------------------------------------
 
-# --- Core data handling -----------------------------------------------------
-numpy==2.5.4            # Numeric arrays; sklearn/scipy/pandas dependency
-pandas==3.0.6           # gzip-CSV loading, joins, missing-value handling
-scipy==1.18.1           # Sparse matrices for TF-IDF, distributions
+# Production runtime (web framework + complete ML stack).
+-r backend/requirements.txt
 
-# --- Machine learning -------------------------------------------------------
-scikit-learn==1.9.1     # Pipeline, ColumnTransformer, imputers, TF-IDF, splits
-joblib==1.6.0           # Model serialization (Phase 2+; pinned now)
-cloudpickle==3.1.2      # Reliable serialization of pipelines/closures
-
-# --- Explainability (Phase 2+; pinned now for consistency) ------------------
-shap==0.53.0            # SHAP explanations over the trained pipeline
-slicer==0.0.8           # Required by shap
-threadpoolctl==3.7.0    # BLAS thread control (sklearn dependency)
-
-# --- Testing ----------------------------------------------------------------
+# --- Testing (development only; not installed on Render) --------------------
 pytest==9.1.1
 pluggy==1.7.0           # pytest engine
 iniconfig==2.3.1        # pytest config parsing
 Pygments==2.21.0        # pytest output rendering
-
-# --- Backend (declared for the finalized stack; installed in Phase 2+) ------
-# fastapi>=0.115,<1.0
-# uvicorn[standard]>=0.30,<1.0
-# pydantic>=2.7,<3.0
-# python-dotenv>=1.0,<2.0

@@ -33,6 +33,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from fastapi import FastAPI
 
+from backend.api import artifacts
+
 # Resolve absolute paths so downstream scripts can run from any CWD.
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_PROJECT_ROOT / ".env")
@@ -79,6 +81,75 @@ model_state: dict[str, Any] = {"pipeline": None, "manifest": None, "feature_name
 log = logging.getLogger("medguard.api")
 
 
+def resolve_artifact_paths() -> tuple[Path, Path]:
+    """Return the paths of the model and manifest artifacts.
+
+    The artifacts are taken from the local filesystem when they are present.
+    Otherwise they are fetched from the configured remote URL and verified
+    against their expected digest. Raises ``RuntimeError`` with an actionable
+    cause when they cannot be made available.
+
+    No placeholder or dummy model is ever substituted.
+    """
+    model_path = artifacts.resolve_artifact(
+        MODEL_PATH,
+        MODEL_PATH.name,
+        artifacts.MODEL_URL_ENV,
+        artifacts.MODEL_SHA_ENV,
+    )
+    manifest_path = artifacts.resolve_artifact(
+        MANIFEST_PATH,
+        MANIFEST_PATH.name,
+        artifacts.MANIFEST_URL_ENV,
+        artifacts.MANIFEST_SHA_ENV,
+    )
+
+    missing = []
+    if model_path is None:
+        missing.append(
+            f"model artifact ({MODEL_PATH}); set {artifacts.MODEL_URL_ENV} to fetch it "
+            f"or place it on disk"
+        )
+    if manifest_path is None:
+        missing.append(
+            f"model manifest ({MANIFEST_PATH}); set {artifacts.MANIFEST_URL_ENV} to fetch it "
+            f"or place it on disk"
+        )
+    if missing:
+        raise RuntimeError(
+            "Missing " + " and ".join(missing) + "."
+            "See docs/RENDER_DEPLOYMENT_FIX.md for the deployment options."
+        )
+    return model_path, manifest_path
+
+
+def _schema_probe_frame():
+    """Build a single schema-valid row for the startup compatibility check.
+
+    The row carries one placeholder value per feature column, chosen from the
+    schema itself (the midpoint of the declared range for numerics, the first
+    declared category for categoricals, ``False`` for booleans). It exists
+    only to prove that the saved artifact and the current code still agree on
+    the feature schema; it is never used to produce a prediction.
+    """
+    import pandas as pd
+
+    from backend.ml import triagegeist_schema
+
+    row = {}
+    for field in triagegeist_schema.FEATURE_FIELDS:
+        if field.dtype == "numeric":
+            if field.min_value is not None and field.max_value is not None:
+                row[field.name] = (field.min_value + field.max_value) / 2.0
+            else:
+                row[field.name] = 1.0
+        elif field.dtype == "categorical":
+            row[field.name] = field.categories[0] if field.categories else "unknown"
+        elif field.dtype == "boolean":
+            row[field.name] = False
+    return pd.DataFrame([row])
+
+
 def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
     """Load the joblib pipeline + JSON manifest lazily.
 
@@ -92,49 +163,45 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
     from backend.ml.triagegeist_preprocessing import leakage_free_feature_names
     from backend.ml.triagegeist_training import run_training
 
-    if not MODEL_PATH.exists():
-        raise RuntimeError(
-            f"Model artifact not found at {MODEL_PATH}. "
-            "Re-run `venv/bin/python -m backend.ml.triagegeist_training` to produce it."
-        )
-    if not MANIFEST_PATH.exists():
-        raise RuntimeError(
-            f"Model manifest not found at {MANIFEST_PATH}. "
-            "Re-run `venv/bin/python -m backend.ml.triagegeist_training` to produce it."
-        )
+    model_path, manifest_path = resolve_artifact_paths()
 
     import json as _json
-    with MANIFEST_PATH.open(encoding="utf-8") as handle:
+    with manifest_path.open(encoding="utf-8") as handle:
         manifest_dict = _json.load(handle)
     manifest = ModelManifest(**manifest_dict)
 
-    pipeline = joblib.load(MODEL_PATH)
+    pipeline = joblib.load(model_path)
 
-    # Sanity-check: a real row must transform without error and produce the
-    # expected feature count (so we can compare against manifest expectations).
+    # Sanity-check: the artifact must still agree with the code that will feed
+    # it. The check is built from the SCHEMA, not from the training dataset:
+    # the dataset is a licensed/large artefact that is not deployed, and
+    # inference only ever needs the model. Requiring train.csv here would make
+    # the service start but refuse to predict.
+    from backend.ml.triagegeist_preprocessing import (
+        build_feature_frame,
+        leakage_free_feature_names,
+    )
+
+    feature_names = leakage_free_feature_names(pipeline)
+
     try:
-        from backend.ml.triagegeist_loader import load_all
-        from backend.ml.triagegeist_preprocessing import build_feature_frame
-
-        data = load_all()
-        train_df_raw = data["train"]
-        feature_frame = build_feature_frame(train_df_raw)
+        feature_frame = build_feature_frame(_schema_probe_frame())
         if len(feature_frame) == 0:
-            raise RuntimeError("Model sanity check failed: feature frame is empty.")
+            raise RuntimeError("feature frame is empty")
         transformed = pipeline.named_steps["preprocess"].transform(feature_frame.head(1))
         actual_features = (
             transformed.shape[1] if hasattr(transformed, "shape") else len(transformed)
         )
         if actual_features < 1:
+            raise RuntimeError(f"transformed output has {actual_features} features")
+        if actual_features != len(feature_names):
             raise RuntimeError(
-                f"Model sanity check failed: transformed output has {actual_features} features."
+                f"artifact expects {len(feature_names)} transformed features but the "
+                f"current schema produces {actual_features}; the model and the code "
+                f"are out of sync"
             )
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"Model sanity check failed: {exc}") from exc
-
-    from backend.ml.triagegeist_preprocessing import leakage_free_feature_names
-
-    feature_names = leakage_free_feature_names(pipeline)
     model_state["pipeline"] = pipeline
     model_state["manifest"] = manifest
     model_state["feature_names"] = feature_names
@@ -143,7 +210,7 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
         manifest.model_name,
         manifest.model_kind,
         len(feature_names),
-        MODEL_PATH,
+        model_path,
     )
     return pipeline, manifest, feature_names
 

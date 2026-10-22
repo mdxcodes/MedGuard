@@ -42,8 +42,31 @@ async function parseResponseBody(response) {
   return await response.text();
 }
 
+/**
+ * Base URL of the deployed backend.
+ *
+ * `VITE_API_BASE_URL` points at the FastAPI service (Render) in production.
+ * The frontend addresses the backend through an `/api` prefix, which the Vite
+ * dev-server proxy strips locally; against a real backend the prefix is
+ * dropped, because the routes are mounted at the application root.
+ *
+ * When the variable is unset the request stays relative, so the local dev
+ * proxy (and `vite preview`) handle it exactly as before.
+ */
+const RAW_API_BASE = (import.meta.env?.VITE_API_BASE_URL || '').trim();
+const API_BASE = RAW_API_BASE
+  ? RAW_API_BASE.replace(/\/+$/, '').replace(/\/api$/, '')
+  : '';
+
+function resolveUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  const suffix = path.startsWith('/') ? path : '/' + path;
+  if (!API_BASE) return suffix;
+  return API_BASE + (suffix.startsWith('/api/') ? suffix.slice(4) : suffix);
+}
+
 export async function apiFetch(path, options = {}) {
-  const url = path.startsWith('/') ? path : '/' + path;
+  const url = resolveUrl(path);
 
   try {
     const response = await fetch(url, {

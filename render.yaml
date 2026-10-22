@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# MedGuard (Triage One) — Render Blueprint
+#
+# This file makes the deployment configuration explicit and repeatable, so the
+# service cannot be built against the wrong dependency file. It was added
+# after a deployment failed with:
+#
+#     ModuleNotFoundError: No module named 'numpy'
+#
+# caused by a build command that installed only the web-framework packages
+# while the API imports numpy/pandas/scikit-learn at request time.
+#
+# Deleting this file is safe: the same values can be entered manually in the
+# Render dashboard (see docs/RENDER_DEPLOYMENT_FIX.md).
+# ---------------------------------------------------------------------------
+
+services:
+  - type: web
+    name: medguard-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: pip install --no-cache-dir -r backend/requirements.txt
+    startCommand: uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    # The model artifact (~250 MB) exceeds GitHub's 100 MB per-file limit and is
+    # therefore not committed. Either mount a disk at /app/models or set
+    # MEDGUARD_MODEL_URL so the service fetches it at startup.
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.14.8"
+      - key: MEDGUARD_MODEL_PATH
+        value: models/triagegeist/triage_model.joblib
+      - key: MEDGUARD_MANIFEST_PATH
+        value: models/triagegeist/triage_model.manifest.json
+      - key: MEDGUARD_DATA_ROOT
+        value: triagegeist

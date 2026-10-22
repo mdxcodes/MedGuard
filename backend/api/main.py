@@ -147,6 +147,28 @@ def create_app() -> FastAPI:
         """Liveness probe. Always 200 as long as the process is up."""
         return {"status": "ok"}
 
+    @app.get("/readyz")
+    def readyz():
+        """Readiness probe: can the service actually serve a prediction?
+
+        Unlike ``/health`` (process liveness) this verifies that the model
+        artifact is present and loadable. It is cheap once the model has been
+        loaded: the artifact is cached in process state and the check reuses
+        it, so no expensive SHAP or evaluation work is performed.
+        """
+        from backend.api.config import get_or_raise_model
+
+        try:
+            _, manifest, feature_names = get_or_raise_model()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return {
+            "status": "ready",
+            "model": manifest.model_name,
+            "dataset": manifest.dataset,
+            "features": len(feature_names),
+        }
+
     @app.get("/model-info", response_model=ModelInfoResponse)
     def model_info() -> ModelInfoResponse:
         """Expose the loaded model's manifest and known limitations."""

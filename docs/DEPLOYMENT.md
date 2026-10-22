@@ -19,24 +19,41 @@ cd MedGuard
 ## Backend Deployment (Render)
 
 1. Create a new **Web Service** on Render and connect your repository.
-2. Set the **Runtime** to `Python 3`.
-3. Set the **Build Command**:
+2. Set the **Root Directory** to `.` (the repository root).
+3. Set the **Runtime** to Python **3.14.8** (or let `.python-version` drive it).
+4. Set the **Build Command** to the canonical production dependency file:
 
    ```
    pip install --no-cache-dir -r backend/requirements.txt
    ```
 
-4. Set the **Start Command**:
+   > `backend/requirements.txt` is the canonical production file and contains
+   > the **complete** runtime set — the web framework *and* the ML stack
+   > (NumPy, pandas, SciPy, scikit-learn, joblib, cloudpickle, SHAP). Installing
+   > only the web-framework packages makes the service fail at import with
+   > `ModuleNotFoundError: No module named 'numpy'`.
+   > See `docs/RENDER_DEPLOYMENT_FIX.md`.
+
+5. Set the **Start Command**:
 
    ```
    uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
    ```
 
-5. Add the environment variables listed under **Environment Variables** below.
-6. Render sets `$PORT` automatically; do not hardcode it.
-7. Deploy. The service will be reachable at your Render URL (e.g. `https://medguard-backend.onrender.com`).
+6. Add the environment variables listed under **Environment Variables** below,
+   including the **model artifact** configuration — the trained pipeline is
+   ~250 MB and is therefore not committed to the repository. See
+   `docs/RENDER_DEPLOYMENT_FIX.md` §6 for the three delivery options.
+7. Render sets `$PORT` automatically; do not hardcode it.
+8. Deploy. The service will be reachable at your Render URL (e.g.
+   `https://medguard-backend.onrender.com`).
 
-Alternative: use the provided `backend/Dockerfile` with a Docker-based Render service.
+A `render.yaml` blueprint in the repository declares these same settings
+(build command, start command, runtime, health check). Keep it and Render
+applies them automatically, or delete it and set them by hand.
+
+Alternative: use the provided `backend/Dockerfile` (build from the repository
+root with `docker build -f backend/Dockerfile .`) for a Docker-based service.
 
 ## Frontend Deployment (Vercel)
 
@@ -63,10 +80,15 @@ Alternative: use the provided `backend/Dockerfile` with a Docker-based Render se
 |---|---|---|
 | `MEDGUARD_MODEL_PATH` | Path to the trained model file | `models/triagegeist/triage_model.joblib` |
 | `MEDGUARD_MANIFEST_PATH` | Path to the model manifest JSON | `models/triagegeist/triage_model.manifest.json` |
-| `MEDGUARD_DATA_ROOT` | Data root directory | `triagegeist` |
+| `MEDGUARD_DATA_ROOT` | Data root directory (training/reporting only) | `triagegeist` |
 | `MEDGUARD_ALLOW_FOREIGN_ORIGIN` | Allow cross-origin requests | `false` |
+| `MEDGUARD_MODEL_URL` | Fetch the artifact from remote storage (optional) | `https://.../triage_model.joblib` |
+| `MEDGUARD_MODEL_SHA256` | Expected digest of the artifact (optional) | `<sha256>` |
 
-Copy `backend/.env.example` to `backend/.env` and adjust values for production.
+Copy `backend/.env.example` to `backend/.env` and adjust values for
+production. `MEDGUARD_MODEL_URL` / `MEDGUARD_MODEL_SHA256` and their manifest
+counterparts are used when the artifact is not on disk; the digest is verified
+before the artifact is loaded.
 
 ### Frontend (`frontend/.env`)
 
@@ -74,7 +96,10 @@ Copy `backend/.env.example` to `backend/.env` and adjust values for production.
 |---|---|---|
 | `VITE_API_BASE_URL` | Base URL of the backend API | `https://medguard-backend.onrender.com` |
 
-Copy `frontend/.env.example` to `frontend/.env` and set the production backend URL.
+Copy `frontend/.env.example` to `frontend/.env` and set the production backend
+URL. When it is set the frontend calls the backend directly; when it is unset
+the request stays relative and the Vite dev proxy forwards `/api/*` to
+`localhost:8000`.
 
 ## Supabase Setup (Optional)
 
@@ -106,17 +131,29 @@ Supabase is optional; MedGuard can run without it using local model files and da
 
    Expected: a JSON response indicating the service is healthy.
 
-2. Test the prediction endpoint with a sample payload:
+2. Confirm the model artifact actually arrived:
 
    ```
-   curl -X POST https://medguard-backend.onrender.com/api/predict \
+   curl https://medguard-backend.onrender.com/readyz
+   ```
+
+   Expected: `{"status":"ready","model":"random_forest","dataset":"Triagegeist","features":66}`.
+   A 503 here means the artifact was not delivered — check §6 of
+   `docs/RENDER_DEPLOYMENT_FIX.md`.
+
+3. Test the prediction endpoint with a sample payload:
+
+   ```
+   curl -X POST https://medguard-backend.onrender.com/predict \
      -H "Content-Type: application/json" \
-     -d '{"symptoms": "chest pain, shortness of breath"}'
+     -d '{"heart_rate":88,"systolic_bp":120,"diastolic_bp":80,"age":45,"sex":"F"}'
    ```
 
-   Expected: a JSON response with a triage prediction and confidence score.
+   Expected: a JSON response with the predicted ESI level, the class
+   probabilities and the SHAP attributions. The route is `/predict` (the
+   frontend's `/api` prefix is stripped when `VITE_API_BASE_URL` is set).
 
-3. Check Render logs if the endpoint returns an error.
+4. Check Render logs if the endpoint returns an error.
 
 ### Frontend
 
