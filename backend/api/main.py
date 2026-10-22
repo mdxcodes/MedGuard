@@ -358,7 +358,8 @@ def create_app() -> FastAPI:
     def drift_endpoint():
         from pathlib import Path
         import json as _json
-        drift_path = config.PROJECT_ROOT / "reports" / "drift_analysis.json"
+        from backend.ml import config as ml_config
+        drift_path = ml_config.PROJECT_ROOT / "reports" / "drift_analysis.json"
         if not drift_path.exists():
             raise HTTPException(status_code=404, detail="Drift analysis not available")
         try:
