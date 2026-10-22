@@ -182,15 +182,26 @@ export default function ResearchSidebar({ open, onClose }) {
 function StatusBadge() {
   // Shared across modes: polled once per session, so switching modes does
   // not re-issue the health request.
-  const { apiStatus } = useModelStatus();
-  const status = apiStatus === 'ok' ? 'available' : apiStatus === 'error' ? 'unavailable' : 'checking';
+  const { apiStatus, modelStatus } = useModelStatus();
 
-  const label = status === 'available' ? 'API available' : status === 'unavailable' ? 'API unavailable' : 'Checking…';
-  const dot = status === 'available' ? 'bg-primary' : status === 'unavailable' ? 'bg-error/50' : 'bg-warning/50';
+  let label = 'Checking…';
+  let dot = 'bg-warning/50';
+  let tone = 'text-white/80';
+
+  if (apiStatus === 'ok') {
+    label = modelStatus === 'ready' ? 'API online · model ready' : 'API online';
+    dot = modelStatus === 'ready' ? 'bg-primary' : 'bg-warning/60';
+    tone = 'text-white/90';
+  } else if (apiStatus === 'error') {
+    label = 'API unavailable';
+    dot = 'bg-error/60';
+    tone = 'text-rose-300';
+  }
+
   return (
     <div className="flex items-center gap-2 text-xs font-medium">
       <span className={`w-2 h-2 rounded-full ${dot} shadow-sm`} />
-      <span className={status === 'available' ? 'text-primary-muted' : 'text-error'}>{label}</span>
+      <span className={tone}>{label}</span>
     </div>
   );
 }

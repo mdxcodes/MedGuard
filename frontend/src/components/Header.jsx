@@ -13,13 +13,54 @@ export default function Header({ onMenu }) {
   const isWide = useMediaQuery('(min-width: 640px)');
   const route = findRoute(loc.pathname);
   const pageTitle = route?.label || '';
-  // Shared across modes: the status is polled once per session, so switching
-  // modes does not re-issue the health and model-info requests.
-  const { modelReady } = useModelStatus();
+  const { apiStatus, modelStatus } = useModelStatus();
 
-  const statusLabel = modelReady === 'ready' ? 'Model ready' : modelReady === 'unavailable' ? 'Model unavailable' : 'Checking…';
-  const statusColor = modelReady === 'ready' ? 'text-primary' : modelReady === 'unavailable' ? 'text-error' : 'text-muted';
-  const dotColor = modelReady === 'ready' ? 'bg-primary' : modelReady === 'unavailable' ? 'bg-error/50' : 'bg-warning/50';
+  /**
+   * The status chip reports the API first and the model second.
+   *
+   * A reachable API that has no model artifact loaded is a healthy service
+   * with a missing artifact, not an outage — labelling it "unavailable" made
+   * a working deployment look broken.
+   */
+  const status = (() => {
+    if (apiStatus === 'error') {
+      return {
+        label: 'API offline',
+        dot: 'bg-error/60',
+        title: 'The MedGuard API could not be reached.',
+      };
+    }
+    if (modelStatus === 'ready') {
+      return {
+        label: 'Model ready',
+        dot: 'bg-primary',
+        title: 'The triage model is loaded and serving predictions.',
+      };
+    }
+    if (modelStatus === 'not-loaded') {
+      return {
+        label: 'API online',
+        hint: 'model not loaded',
+        dot: 'bg-warning/60',
+        title:
+          'The API is running, but the model artifact is not loaded on the server, '
+          + 'so predictions are unavailable.',
+      };
+    }
+    if (modelStatus === 'error') {
+      return {
+        label: 'API online',
+        hint: 'model status unknown',
+        dot: 'bg-warning/60',
+        title: 'The API is running, but the model status could not be determined.',
+      };
+    }
+    return {
+      label: 'Checking…',
+      dot: 'bg-warning/50',
+      title: 'Checking the API and model status.',
+    };
+  })();
 
   return (
     <header className="sticky top-0 z-30 bg-surface/90 backdrop-blur-md border-b border-border">
@@ -60,10 +101,14 @@ export default function Header({ onMenu }) {
           <div className="h-4 w-px border hidden sm:block" />
           <div
             className="flex items-center gap-2 text-[10px] font-mono bg-surface-soft px-2.5 py-1 rounded-full border border-border shrink-0"
-            title={`${statusLabel} · v0.2.0-demo`}
+            title={`${status.title} · v0.2.0-demo`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shadow-sm`} />
-            <span className={`${statusColor} hidden sm:inline`}>{statusLabel} · v0.2.0-demo</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${status.dot} shadow-sm`} />
+            <span className="text-ink hidden sm:inline">{status.label}</span>
+            {status.hint && (
+              <span className="text-muted hidden md:inline">· {status.hint}</span>
+            )}
+            <span className="text-muted hidden sm:inline">· v0.2.0-demo</span>
           </div>
         </div>
       </div>
