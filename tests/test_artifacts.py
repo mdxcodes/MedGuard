@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.api import artifacts
+from backend.ml import artifacts
 
 
 @pytest.fixture
@@ -121,6 +121,110 @@ class TestDigestVerification:
         assert resolved is not None
         assert resolved.read_bytes() == payload
         assert artifacts.sha256_file(resolved) == digest
+
+
+class TestSupabaseStorageAuth:
+    """A private bucket needs the backend-only service-role key."""
+
+    def test_supabase_url_gets_the_service_role_header(self, clean_env, monkeypatch):
+        monkeypatch.setenv(artifacts.SUPABASE_URL_ENV, "https://project.supabase.co")
+        monkeypatch.setenv(artifacts.SUPABASE_SERVICE_ROLE_ENV, "secret-key")
+        headers = artifacts._auth_headers(
+            "https://project.supabase.co/storage/v1/object/bucket/model.joblib"
+        )
+        assert headers["Authorization"] == "Bearer secret-key"
+        assert headers["apikey"] == "secret-key"
+
+    def test_a_foreign_host_gets_no_credentials(self, clean_env, monkeypatch):
+        monkeypatch.setenv(artifacts.SUPABASE_URL_ENV, "https://project.supabase.co")
+        monkeypatch.setenv(artifacts.SUPABASE_SERVICE_ROLE_ENV, "secret-key")
+        assert artifacts._auth_headers("https://cdn.example.com/model.joblib") == {}
+
+    def test_no_key_means_no_credentials(self, clean_env, monkeypatch):
+        monkeypatch.setenv(artifacts.SUPABASE_URL_ENV, "https://project.supabase.co")
+        monkeypatch.delenv(artifacts.SUPABASE_SERVICE_ROLE_ENV, raising=False)
+        assert artifacts._auth_headers(
+            "https://project.supabase.co/storage/v1/object/bucket/model.joblib"
+        ) == {}
+
+
+class TestCompressedArtifacts:
+    """The artifact is stored xz-compressed to fit the Storage file limit."""
+
+    def test_an_xz_payload_is_restored(self, clean_env, monkeypatch, tmp_path):
+        import lzma
+
+        payload = b"model-bytes" * 5000
+        digest = hashlib.sha256(payload).hexdigest()
+        archive = lzma.compress(payload)
+
+        monkeypatch.setenv(artifacts.MODEL_URL_ENV, "https://example.invalid/model.joblib.xz")
+        monkeypatch.setenv(artifacts.MODEL_SHA_ENV, digest)
+
+        class _Response:
+            def raise_for_status(self):
+                return None
+
+            def iter_bytes(self, chunk_size):
+                yield archive
+
+        class _Stream:
+            def __enter__(self):
+                return _Response()
+
+            def __exit__(self, *exc):
+                return False
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "stream", lambda *a, **k: _Stream())
+
+        resolved = artifacts.resolve_artifact(
+            tmp_path / "absent.joblib",
+            "model.joblib",
+            artifacts.MODEL_URL_ENV,
+            artifacts.MODEL_SHA_ENV,
+        )
+        assert resolved is not None
+        assert resolved.read_bytes() == payload
+
+    def test_the_digest_is_of_the_restored_file(self, clean_env, monkeypatch, tmp_path):
+        import lzma
+
+        payload = b"original-model-bytes"
+        digest = hashlib.sha256(payload).hexdigest()
+        archive = lzma.compress(payload)
+        # The digest of the COMPRESSED bytes must NOT satisfy the check.
+        compressed_digest = hashlib.sha256(archive).hexdigest()
+
+        monkeypatch.setenv(artifacts.MODEL_URL_ENV, "https://example.invalid/model.joblib.xz")
+        monkeypatch.setenv(artifacts.MODEL_SHA_ENV, compressed_digest)
+
+        class _Response:
+            def raise_for_status(self):
+                return None
+
+            def iter_bytes(self, chunk_size):
+                yield archive
+
+        class _Stream:
+            def __enter__(self):
+                return _Response()
+
+            def __exit__(self, *exc):
+                return False
+
+        import httpx
+
+        monkeypatch.setattr(httpx, "stream", lambda *a, **k: _Stream())
+
+        with pytest.raises(artifacts.ArtifactError, match="digest mismatch"):
+            artifacts.resolve_artifact(
+                tmp_path / "absent.joblib",
+                "model.joblib",
+                artifacts.MODEL_URL_ENV,
+                artifacts.MODEL_SHA_ENV,
+            )
 
 
 class TestNoDummySubstitution:

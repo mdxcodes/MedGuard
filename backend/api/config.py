@@ -33,7 +33,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from fastapi import FastAPI
 
-from backend.api import artifacts
+from backend.ml import artifacts
 
 # Resolve absolute paths so downstream scripts can run from any CWD.
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +54,34 @@ DATA_ROOT = Path(ENV["DATA_ROOT"])
 
 #: When truthy the app enables permissive CORS (useful for tests).
 ALLOW_FOREIGN_ORIGIN = os.getenv("MEDGUARD_ALLOW_FOREIGN_ORIGIN", "0") == "1"
+
+
+def _allowed_origins() -> list[str]:
+    """Origins allowed to call the API.
+
+    ``MEDGUARD_CORS_ORIGINS`` is a comma-separated list of exact origins,
+    for example the deployed Vercel frontend and its preview deployments::
+
+        MEDGUARD_CORS_ORIGINS=https://medguard.vercel.app,https://medguard-*.vercel.app
+
+    A wildcard entry (``*``) is accepted for local development, but it is
+    never combined with credentialed requests, because browsers reject that
+    combination and the specification forbids it.
+    """
+    raw = os.getenv("MEDGUARD_CORS_ORIGINS", "").strip()
+    if not raw:
+        return []
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+#: Exact origins permitted to call this API from a browser.
+CORS_ORIGINS = _allowed_origins()
+
+#: Optional regular expression matching additional origins, used for Vercel
+#: preview deployments whose domain is not known in advance, e.g.
+#: ``https://medguard-.*\.vercel\.app``. Leave unset to allow only the exact
+#: origins above.
+CORS_ORIGIN_REGEX = os.getenv("MEDGUARD_CORS_ORIGIN_REGEX", "").strip() or None
 
 
 class ModelManifest(BaseModel):

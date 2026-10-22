@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+import logging
+
 from backend.ml import config
+
+log = logging.getLogger("medguard.ml.registry")
 
 
 #: The registry describes the model the application actually serves. These
@@ -16,6 +20,11 @@ MODELS_DIR = config.MODELS_DIR
 REPORTS_DIR = config.REPORTS_DIR
 MANIFEST_PATH = config.MANIFEST_PATH
 MODEL_PATH = config.MODEL_PATH
+
+from backend.ml import artifacts
+
+MANIFEST_URL_ENV = artifacts.MANIFEST_URL_ENV
+MANIFEST_SHA_ENV = artifacts.MANIFEST_SHA_ENV
 
 
 def sha256_file(p: Path) -> str:
@@ -27,11 +36,39 @@ def sha256_file(p: Path) -> str:
 
 
 def load_manifest(manifest_path: Path | None = None) -> Dict[str, Any]:
+    """Load the active model manifest.
+
+    The manifest may be delivered from disk or fetched from remote storage,
+    exactly like the model artifact itself, so the registry always describes
+    the model the service is actually serving.
+    """
     p = manifest_path or MANIFEST_PATH
     if not p.exists():
-        raise FileNotFoundError(f"Manifest not found: {p}")
+        resolved = _resolve_manifest()
+        if resolved is None:
+            raise FileNotFoundError(
+                f"Manifest not found: {p}. Provide {MANIFEST_URL_ENV} to fetch it, "
+                "or place it on disk. See docs/RENDER_DEPLOYMENT_FIX.md."
+            )
+        p = resolved
     with open(p, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _resolve_manifest() -> Path | None:
+    """Fetch the manifest through the API artifact resolver."""
+    from backend.ml import artifacts
+
+    try:
+        return artifacts.resolve_artifact(
+            MANIFEST_PATH,
+            MANIFEST_PATH.name,
+            artifacts.MANIFEST_URL_ENV,
+            artifacts.MANIFEST_SHA_ENV,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not fetch the model manifest: %s", exc)
+        raise
 
 
 def check_integrity(manifest: Dict[str, Any], manifest_path: Path | None = None) -> Dict[str, Any]:

@@ -10,6 +10,11 @@
 # caused by a build command that installed only the web-framework packages
 # while the API imports numpy/pandas/scikit-learn at request time.
 #
+# The model artifact (~250 MB) exceeds both GitHub's 100 MB per-file limit and
+# Supabase Storage's 50 MB per-file limit, so it is stored xz-compressed
+# (32 MB) in a private Supabase Storage bucket and restored by the service at
+# startup. The digest is verified before the artifact is loaded.
+#
 # Deleting this file is safe: the same values can be entered manually in the
 # Render dashboard (see docs/RENDER_DEPLOYMENT_FIX.md).
 # ---------------------------------------------------------------------------
@@ -24,15 +29,44 @@ services:
     buildCommand: pip install --no-cache-dir -r backend/requirements.txt
     startCommand: uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    # The model artifact (~250 MB) exceeds GitHub's 100 MB per-file limit and is
-    # therefore not committed. Either mount a disk at /app/models or set
-    # MEDGUARD_MODEL_URL so the service fetches it at startup.
     envVars:
       - key: PYTHON_VERSION
         value: "3.14.8"
+
+      # --- Model artifact delivery (private Supabase Storage bucket) -------
+      # The artifact is not committed: it is downloaded once at startup,
+      # decompressed and verified against the digest below.
       - key: MEDGUARD_MODEL_PATH
         value: models/triagegeist/triage_model.joblib
       - key: MEDGUARD_MANIFEST_PATH
         value: models/triagegeist/triage_model.manifest.json
+      - key: MEDGUARD_MODEL_URL
+        value: https://tpzfaulcjcvleupjlufu.supabase.co/storage/v1/object/model-artifacts/triagegeist/v1.0/triage_model.joblib.xz
+      - key: MEDGUARD_MODEL_SHA256
+        value: 9c3472ad5e4126e9a99235020e2e75e904b32e77f0add7a4b34f6221aedff305
+      - key: MEDGUARD_MANIFEST_URL
+        value: https://tpzfaulcjcvleupjlufu.supabase.co/storage/v1/object/model-artifacts/triagegeist/v1.0/triage_model.manifest.json
+      - key: MEDGUARD_MANIFEST_SHA256
+        value: d30918bd16978ea8ad20295e6241c362cdea2c24a400d89c5aef89ddc4691058
+      - key: MEDGUARD_ARTIFACT_DIR
+        value: /tmp/medguard-artifacts
+
+      # --- Supabase (backend only) ----------------------------------------
+      # The service-role key bypasses Row Level Security. It is a secret: it is
+      # NOT stored here and NOT committed to the repository. Set it in the
+      # Render dashboard under Environment Variables.
+      - key: SUPABASE_URL
+        value: https://tpzfaulcjcvleupjlufu.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # --- CORS ----------------------------------------------------------
+      # The deployed Vercel frontend, plus its preview deployments.
+      - key: MEDGUARD_CORS_ORIGINS
+        value: https://medguard.vercel.app
+      - key: MEDGUARD_CORS_ORIGIN_REGEX
+        value: https://medguard-.*\.vercel\.app
+
+      # --- Data ----------------------------------------------------------
       - key: MEDGUARD_DATA_ROOT
         value: triagegeist

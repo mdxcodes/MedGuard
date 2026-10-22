@@ -134,12 +134,21 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # CORS: the exact origins listed in MEDGUARD_CORS_ORIGINS (the deployed
+    # Vercel frontend and its previews), or "*" for local development.
+    # Credentialed requests are never combined with a wildcard origin.
+    allow_origins = api_config.CORS_ORIGINS
+    allow_credentials = True
+    if api_config.ALLOW_FOREIGN_ORIGIN:
+        allow_origins = ["*"]
+        allow_credentials = False
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if api_config.ALLOW_FOREIGN_ORIGIN else [],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=allow_origins,
+        allow_origin_regex=api_config.CORS_ORIGIN_REGEX,
+        allow_credentials=allow_credentials,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     )
 
     @app.get("/health")
