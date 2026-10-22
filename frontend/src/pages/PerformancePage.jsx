@@ -1,41 +1,88 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { FileDown, Info } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import ConfusionMatrix from '../components/ConfusionMatrix';
 import CVDistChart from '../components/CVDistChart';
 import ReportExportButton from '../components/ReportExportButton';
-import { PageShell, SectionCard, StatMetric } from '../components/ui/states';
-import modelEval from '../../../reports/model_evaluation.json';
+import { PageShell, SectionCard, StatMetric, LoadingState } from '../components/ui/states';
+import { apiFetch } from '../lib/api';
 
-const HOLDOUT = modelEval.candidates_holdout?.random_forest ?? {};
-const CV = modelEval.candidates_5fold_cv?.random_forest ?? {};
-const CV_SUMMARY = CV.summary ?? {};
-const AGG_CM = CV.aggregate_confusion_matrix ?? [];
-const PER_CLASS = HOLDOUT.per_class ?? {};
 const ESI_LABELS = ['ESI 1', 'ESI 2', 'ESI 3', 'ESI 4', 'ESI 5'];
 
 const fmt = (v, d = 3) => (typeof v === 'number' ? v.toFixed(d) : '—');
 const pct = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : '—');
 
 export default function PerformancePage() {
-  const nRows = modelEval.n_rows ?? 0;
-  const nPatients = modelEval.n_patients ?? 0;
+  const [metrics, setMetrics] = useState(null);
+  const [dataset, setDataset] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await apiFetch('/api/metrics');
+        if (!result.ok) {
+          setError(result.error?.message || 'Failed to load evaluation metrics.');
+          return;
+        }
+        const data = result.data;
+        if (!cancelled) {
+          setMetrics(data.metrics);
+          setDataset(data.dataset);
+        }
+      } catch (e) {
+        if (!cancelled) setError('Failed to load evaluation metrics.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) return <LoadingState message="Loading evaluation metrics…" />;
+  if (error) {
+    return (
+      <div className="max-w-5xl mx-auto py-12">
+        <div className="rounded-xl border border-error/20 bg-error-bg p-5 text-center">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-5 h-5 rounded-full bg-error flex items-center justify-center shrink-0">
+              <span className="text-[14px]">💥</span>
+            </div>
+            <div className="flex-1">
+              <div className="font-bold text-error">Metrics unavailable</div>
+              <div className="text-xs text-secondary mt-1">{error}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const nRows = dataset?.n_rows ?? 0;
+  const nPatients = dataset?.n_patients ?? 0;
+  const CV = metrics?.cv ?? {};
+  const CV_SUMMARY = CV ?? {};
+  const AGG_CM = CV_SUMMARY.aggregate_confusion_matrix ?? [];
+  const HOLDOUT = metrics?.holdout ?? {};
+  const PER_CLASS = metrics?.per_class_holdout ?? {};
 
   return (
     <div className="space-y-8">
       <PageShell
         title="Model performance"
-        subtitle="Verified metrics for the Random Forest trained on Triagegeist. All values are produced by the reproducible evaluation pipeline — no hardcoded or estimated numbers."
+        subtitle="Verified metrics for the model trained on Triagegeist big training — 80 000 labelled visits, patient-grouped 5-fold CV. All values are produced by the reproducible evaluation pipeline."
         breadcrumb="Research · Model Performance"
       />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2 text-[11px] font-mono text-muted">
           <span className="px-2 py-1 rounded border border-border bg-surface-soft">
-            dataset: {modelEval.dataset}
+            dataset: Triagegeist big training
           </span>
           <span className="px-2 py-1 rounded border border-border bg-surface-soft">
-            seed: {modelEval.random_seed}
+            seed: {dataset?.random_seed ?? '—'}
           </span>
           <span className="px-2 py-1 rounded border border-border bg-surface-soft">
             {nRows.toLocaleString()} rows · {nPatients.toLocaleString()} patients
@@ -156,7 +203,7 @@ export default function PerformancePage() {
       <SectionCard title="Class distribution" badge="Modelling cohort">
         <div className="grid grid-cols-5 gap-2">
           {ESI_LABELS.map((label) => {
-            const count = modelEval.class_distribution?.[label] ?? 0;
+            const count = dataset?.target_distribution_train?.[label] ?? 0;
             const share = nRows > 0 ? (count / nRows) * 100 : 0;
             return (
               <div key={label} className="rounded-lg border border-border bg-surface p-3 text-center">

@@ -354,6 +354,18 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=500, detail="Metrics endpoint not available")
         return metrics_status()
 
+    @app.get("/drift")
+    def drift_endpoint():
+        from pathlib import Path
+        import json as _json
+        drift_path = config.PROJECT_ROOT / "reports" / "drift_analysis.json"
+        if not drift_path.exists():
+            raise HTTPException(status_code=404, detail="Drift analysis not available")
+        try:
+            return _json.loads(drift_path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=f"Invalid drift analysis: {exc}") from exc
+
     @app.get("/export/report")
     def export_report():
         if export_research_report is None:

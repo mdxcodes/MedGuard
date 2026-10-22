@@ -50,7 +50,6 @@ def metrics_status():
     benchmark = _load_json(BENCHMARK_PATH)
     profile = _load_json(PROFILE_PATH)
     manifest = _load_json(MANIFEST_PATH) if MANIFEST_PATH.exists() else {}
-
     model_results = benchmark.get("model_results", {})
     lr_holdout = model_results.get("logistic_regression", {})
     cv_summary = benchmark.get("cv_summary", {})
@@ -100,6 +99,7 @@ def metrics_status():
         "missing_percent": profile.get("missing_percent", {}),
         "feature_stats": profile.get("feature_stats", {}),
         "target_distribution_train": profile.get("target_distribution_train", target_dist),
+        "random_seed": manifest.get("random_seed"),
     }
 
     return {
