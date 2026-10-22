@@ -81,12 +81,16 @@ def build_logistic_regression_pipeline(preprocess: Any = None) -> Any:
 
 
 def build_random_forest_pipeline(preprocess: Any = None) -> Any:
-    """Build a Random Forest pipeline."""
+    """Build a Random Forest pipeline.
+
+    Smaller than the production model so it fits within Render's free-tier
+    512 MiB memory limit (targeting ~450-500 MiB peak RSS at load time).
+    """
     from sklearn.pipeline import Pipeline
     preprocess = preprocess or build_preprocessor()
     estimator = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=None,
+        n_estimators=70,
+        max_depth=5,
         random_state=config.RANDOM_SEED,
         n_jobs=-1,
         class_weight="balanced_subsample",

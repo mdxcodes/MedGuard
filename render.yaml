@@ -37,21 +37,18 @@ services:
         value: "3.14.8"
 
       # --- Model artifact delivery ------------------------------------------
-      # The artifact is not committed (250 MB, over GitHub's 100 MB limit). It
-      # is stored xz-compressed (~33 MB) in a private Supabase Storage bucket
-      # and restored on startup, verified against its SHA-256.
-      #
-      # The starter plan (1 GB) is required because unpickling the 256 MB
-      # RandomForest peaks at ~706 MiB RSS, exceeding the 512 MiB of the free
-      # tier.
+      # The artifact is not committed. It is stored xz-compressed (~8 KB) in a
+      # private Supabase Storage bucket and restored on startup, verified
+      # against its SHA-256. The LogisticRegression model is small enough for
+      # Render's free tier (512 MiB).
       - key: MEDGUARD_MODEL_URL
         value: https://tpzfaulcjcvleupjlufu.supabase.co/storage/v1/object/model-artifacts/triagegeist/v1.0/triage_model.joblib.xz
       - key: MEDGUARD_MODEL_SHA256
-        value: 9c3472ad5e4126e9a99235020e2e75e904b32e77f0add7a4b34f6221aedff305
+        value: df0d5de3a0405894b1e45eba210221f1c19be4bcb89788bef2ef59906510a4b4
       - key: MEDGUARD_MANIFEST_URL
         value: https://tpzfaulcjcvleupjlufu.supabase.co/storage/v1/object/model-artifacts/triagegeist/v1.0/triage_model.manifest.json
       - key: MEDGUARD_MANIFEST_SHA256
-        value: d30918bd16978ea8ad20295e6241c362cdea2c24a400d89c5aef89ddc4691058
+        value: 04ef6aa5c601ae1ab0f3ce1bf8b532659e3e411e6873c4a3d0516e14406f119b
       - key: MEDGUARD_ARTIFACT_DIR
         value: /tmp/medguard-artifacts
 

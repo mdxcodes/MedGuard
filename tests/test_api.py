@@ -115,7 +115,7 @@ class TestModelInfo:
         resp = client.get("/model-info")
         assert resp.status_code == 200
         payload = resp.json()
-        assert payload["model_name"] == "random_forest"
+        assert payload["model_name"] == "logistic_regression"
         assert payload["supported_esi_levels"] == [1, 2, 3, 4, 5]
         assert len(payload["limitations"]) > 0
         assert "triagegeist" in payload["dataset"].lower()
