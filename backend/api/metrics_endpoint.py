@@ -1,9 +1,9 @@
 """Evaluation metrics endpoint.
 
-Serves aggregate model evaluation metrics from
-``reports/model_evaluation.json`` — the authoritative source of record for
-all displayed performance numbers. Read-only; no patient identifiers or raw
-records are ever exposed.
+Serves aggregate model evaluation metrics from ``reports/triagegeist/``
+(``benchmark_results.json`` + ``dataset_profile.json`` + ``experiment_manifest.json``)
+— the authoritative source of record for all displayed performance numbers.
+Read-only; no patient identifiers or raw records are ever exposed.
 """
 
 from __future__ import annotations
@@ -16,9 +16,22 @@ from fastapi import HTTPException
 from backend.ml import config
 
 
-REPORTS_DIR = config.PROJECT_ROOT / "reports"
-MODEL_EVAL_PATH = REPORTS_DIR / "model_evaluation.json"
-DATA_QUALITY_PATH = REPORTS_DIR / "data_quality_report.json"
+TG_REPORTS = config.PROJECT_ROOT / "reports" / "triagegeist"
+BENCHMARK_PATH = TG_REPORTS / "benchmark_results.json"
+PROFILE_PATH = TG_REPORTS / "dataset_profile.json"
+MANIFEST_PATH = TG_REPORTS / "experiment_manifest.json"
+
+ESI_LABELS = ["ESI 1", "ESI 2", "ESI 3", "ESI 4", "ESI 5"]
+
+TRAINING_ROWS = 80000
+TRAINING_PATIENTS = 80000
+
+
+def _load_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Invalid report {path.name}: {exc}") from exc
 
 
 def metrics_status():
@@ -27,41 +40,43 @@ def metrics_status():
     Returns a dict with two top-level keys:
 
     * ``dataset`` — row counts, label distribution, missingness summary
-      (from ``data_quality_report.json``).
-    * ``metrics`` — holdout and 5-fold CV aggregate metrics for the selected
-      Random Forest model (from ``model_evaluation.json``).
+      (from ``dataset_profile.json``).
+    * ``metrics`` — holdout and 5-fold CV aggregate metrics from
+      ``benchmark_results.json`` (Triagegeist big training, 80 000 rows).
     """
-    if not MODEL_EVAL_PATH.exists():
-        raise HTTPException(status_code=404, detail="Model evaluation report not available")
+    if not BENCHMARK_PATH.exists() or not PROFILE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Triagegeist benchmark artifacts not available")
 
-    try:
-        model_eval = json.loads(MODEL_EVAL_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"Invalid model evaluation report: {exc}") from exc
+    benchmark = _load_json(BENCHMARK_PATH)
+    profile = _load_json(PROFILE_PATH)
+    manifest = _load_json(MANIFEST_PATH) if MANIFEST_PATH.exists() else {}
 
-    data_quality = None
-    if DATA_QUALITY_PATH.exists():
-        try:
-            data_quality = json.loads(DATA_QUALITY_PATH.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            data_quality = None
+    model_results = benchmark.get("model_results", {})
+    lr_holdout = model_results.get("logistic_regression", {})
+    cv_summary = benchmark.get("cv_summary", {})
 
-    # Selected model = Random Forest per reports/model_evaluation.json
-    rf_holdout = model_eval.get("candidates_holdout", {}).get("random_forest", {})
-    rf_cv = model_eval.get("candidates_5fold_cv", {}).get("random_forest", {})
-    cv_summary = rf_cv.get("summary", {})
+    per_class = lr_holdout.get("per_class", {})
+    per_class_holdout = {}
+    for label in ESI_LABELS:
+        if label in per_class:
+            per_class_holdout[label] = per_class[label]
 
     metrics = {
-        "model_name": "random_forest",
+        "model_name": "logistic_regression",
+        "training_rows": TRAINING_ROWS,
+        "training_patients": TRAINING_PATIENTS,
+        "dataset_size": "big",
         "holdout": {
-            "macro_f1": rf_holdout.get("macro_f1"),
-            "balanced_accuracy": rf_holdout.get("balanced_accuracy"),
-            "quadratic_weighted_kappa": rf_holdout.get("quadratic_weighted_kappa"),
-            "confusion_matrix": rf_holdout.get("confusion_matrix"),
-            "confusion_matrix_labels": rf_holdout.get("confusion_matrix_labels", ["ESI 1", "ESI 2", "ESI 3", "ESI 4", "ESI 5"]),
-            "y_true_counts": rf_holdout.get("y_true_counts"),
-            "train_rows": rf_holdout.get("train_rows"),
-            "test_rows": rf_holdout.get("test_rows"),
+            "macro_f1": lr_holdout.get("macro_f1"),
+            "balanced_accuracy": lr_holdout.get("balanced_accuracy"),
+            "quadratic_weighted_kappa": lr_holdout.get("quadratic_weighted_kappa"),
+            "confusion_matrix": lr_holdout.get("confusion_matrix"),
+            "confusion_matrix_labels": ESI_LABELS,
+            "y_true_counts": lr_holdout.get("y_true_counts"),
+            "train_rows": benchmark.get("train_rows"),
+            "test_rows": benchmark.get("test_rows"),
+            "train_patients": benchmark.get("n_patients_train"),
+            "test_patients": benchmark.get("n_patients_test"),
         },
         "cv": {
             "mean_macro_f1": cv_summary.get("mean_macro_f1"),
@@ -71,24 +86,24 @@ def metrics_status():
             "mean_quadratic_weighted_kappa": cv_summary.get("mean_quadratic_weighted_kappa"),
             "std_quadratic_weighted_kappa": cv_summary.get("std_quadratic_weighted_kappa"),
             "n_folds": cv_summary.get("n_folds"),
-            "aggregate_confusion_matrix": rf_cv.get("aggregate_confusion_matrix"),
+            "aggregate_confusion_matrix": None,
         },
-        "per_class_holdout": rf_holdout.get("per_class"),
+        "per_class_holdout": per_class_holdout,
     }
 
-    dataset = {}
-    if data_quality:
-        dataset = {
-            "n_rows": model_eval.get("n_rows"),
-            "n_patients": model_eval.get("n_patients"),
-            "label_distribution": model_eval.get("class_distribution"),
-            "row_counts": data_quality.get("row_counts"),
-            "missing_percent": data_quality.get("missing_percent"),
-            "feature_stats": data_quality.get("feature_stats"),
-        }
+    target_dist = profile.get("target_distribution", {})
+    dataset = {
+        "n_rows": profile.get("train_rows", TRAINING_ROWS),
+        "n_patients": profile.get("train_patients", TRAINING_PATIENTS),
+        "label_distribution": target_dist,
+        "row_counts": profile.get("row_counts", {}),
+        "missing_percent": profile.get("missing_percent", {}),
+        "feature_stats": profile.get("feature_stats", {}),
+        "target_distribution_train": profile.get("target_distribution_train", target_dist),
+    }
 
     return {
         "dataset": dataset,
         "metrics": metrics,
-        "provenance": "reports/model_evaluation.json + reports/data_quality_report.json",
+        "provenance": "reports/triagegeist/benchmark_results.json + dataset_profile.json",
     }
