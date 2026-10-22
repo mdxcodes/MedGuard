@@ -62,11 +62,18 @@ SUPABASE_SERVICE_ROLE_ENV = "SUPABASE_SERVICE_ROLE_KEY"
 
 _CHUNK = 1024 * 1024
 
-#: Suffix -> decompressor. Only formats available in the standard library are
-#: supported, so no extra dependency is needed to restore the artifact.
+#: Suffix -> streaming opener. Only formats available in the standard library
+#: are supported, so no extra dependency is needed to restore the artifact.
+#:
+#: These are deliberately *streaming* openers, not one-shot decompressors. The
+#: artifact expands from 32 MB to 256 MB; decompressing it into a single
+#: in-memory buffer and then writing it out would need roughly 512 MB at
+#: peak, which exceeds the memory limit of a small Render instance and gets
+#: the process OOM-killed during startup. Streaming keeps the peak at one
+#: chunk.
 _DECOMPRESSORS = {
-    ".xz": lzma.decompress,
-    ".gz": gzip.decompress,
+    ".xz": lzma.open,
+    ".gz": gzip.open,
 }
 
 
@@ -162,18 +169,21 @@ def _finalize(archive: Path, target: Path, compression_suffix: str = "") -> Path
         shutil.move(str(archive), str(target))
         return target
 
+    temp_path = None
     try:
-        with archive.open("rb") as source:
-            payload = decompress(source.read())
+        with tempfile.NamedTemporaryFile(
+            dir=str(target.parent), prefix=target.name, suffix=".part", delete=False
+        ) as sink:
+            temp_path = Path(sink.name)
+            # Stream the expansion to disk one chunk at a time.
+            with decompress(archive, "rb") as source:
+                shutil.copyfileobj(source, sink, length=_CHUNK)
     except Exception as exc:  # noqa: BLE001
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
         archive.unlink(missing_ok=True)
         raise ArtifactError(f"Could not decompress {archive.name}: {exc}") from exc
 
-    with tempfile.NamedTemporaryFile(
-        dir=str(target.parent), prefix=target.name, suffix=".part", delete=False
-    ) as sink:
-        sink.write(payload)
-        temp_path = Path(sink.name)
     shutil.move(str(temp_path), str(target))
     archive.unlink(missing_ok=True)
     log.info("Decompressed %s into %s", archive.name, target)
