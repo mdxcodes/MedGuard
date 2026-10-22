@@ -2,7 +2,7 @@
 
 **Repository:** /secondary/MedGuard  
 **Branch:** main  
-**Commit:** `dfec5ae` — *Complete the Triagegeist migration: port tests, fix pipeline defects, align reports*  
+**Commit:** `1fbfacd` — *Correct the reports/ ignore comment* (dual-mode UI work is uncommitted)  
 **Date:** 2026-10-21  
 
 **Dataset:** Triagegeist (synthetic) — the primary and only dataset on the active execution path.
@@ -14,8 +14,8 @@
 | Command | Result |
 |---------|--------|
 | `git status --short` | **Clean** — working tree has no uncommitted changes |
-| `venv/bin/python -m pytest tests/ -q` | **119 passed, 0 failed, 0 errors** |
-| `cd frontend && npx vitest run` | **35 passed, 0 failed** (8 test files) |
+| `venv/bin/python -m pytest tests/ -q` | **157 passed, 0 failed, 0 errors** |
+| `cd frontend && npx vitest run` | **116 passed, 0 failed** (15 test files) |
 | `cd frontend && npx vite build` | **Success** — `index-BbMypOb8.js`, `index-C4ZGAvF3.css` |
 | `venv/bin/python -m backend.ml.triagegeist_training` | **Success** — artifact + manifest written |
 | `venv/bin/python -m backend.ml.build_reports` | **Success** — 11 aggregate artifacts written |
@@ -28,6 +28,7 @@
 | `curl /predict` (invalid `heart_rate=9999`) | Structured validation error, no stack-trace leak (422) |
 | `curl /predict` (empty body `{}`) | 200 — all fields optional, missing vitals imputed with a missingness indicator |
 | Report leak scan | **No patient identifiers, no free complaint text, no MIMIC labels** in any of the 11 report artifacts |
+| Dual-mode UI | Patient Mode + Research Lab implemented; see `DUAL_MODE_UI_IMPLEMENTATION_REPORT.md` |
 
 ---
 
@@ -95,3 +96,18 @@ These are properties of the data or the scope, not defects:
 4. **The comorbidity history is not served.** The 25 `hx_*` flags are joined by the data-preparation pipeline but the deployed model does not use them: the assessment API cannot supply them for a new presentation, and defaulting them to "no comorbidity" would fabricate clinical history.
 5. **Licensing unverified.** The local Triagegeist files carry no embedded license text; confirm redistribution terms before sharing data or derived artifacts.
 6. **No real browser automation.** Routes are verified via HTTP 200, the production build and the component test suite; pixel-level rendering was not confirmed in a real browser.
+7. **The production bundle is ~14.4 MB.** `reports/evaluation_errors.json` (64,000 out-of-fold records) is imported statically by the research pages. Pre-existing and deliberately not fixed by truncating published evaluation data, which would make the error-analysis statistics report sample figures as cohort figures.
+8. **Assessment data is in-memory only.** A reload on the result page returns to the empty state. This is deliberate: clinical-shaped input is never persisted.
+
+## 6a. Dual-mode UI verification (added 2026-10-21)
+
+| Check | Result |
+|---|---|
+| Patient Mode default | New visitors land in Patient Mode; a stored preference is restored before the first paint |
+| Mode switcher | Present in the top navigation; exactly one instance in the DOM at any viewport |
+| Mode switch | 420 ms transition with an overlay, a live-region announcement, and an instant switch under `prefers-reduced-motion` |
+| Shared prediction | One `submitAssessment` service; one stored response; both result pages render the same object |
+| Result integrity | The displayed result is the response for the submitted payload; no second request; no hardcoded fallback |
+| Backend failure | An error and a retry action are shown; no result is fabricated |
+| API | `/health`, `/model-info`, `/metrics`, `/triagegeist/status` and `/predict` all respond correctly through the frontend proxy |
+| Categorical fidelity | The API now maps categorical inputs onto the encoder's trained categories; three features that were previously dropped from every prediction are restored (38 new backend tests) |

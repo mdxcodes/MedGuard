@@ -271,6 +271,27 @@ def _file_inventory() -> dict[str, dict[str, Any]]:
     return inventory
 
 
+def _unique_patients(name: str) -> int | None:
+    """Number of distinct patients in a released Triagegeist file."""
+    path = config.DATASET_DIR / f"{name}.csv"
+    if not path.exists():
+        return None
+    frame = pd.read_csv(path, usecols=[config.SUBJECT_ID_COLUMN])
+    return int(frame[config.SUBJECT_ID_COLUMN].nunique())
+
+
+def _patient_overlap(left: str, right: str) -> int:
+    """Patients appearing in both files. 0 means no patient-level leakage."""
+    left_path = config.DATASET_DIR / f"{left}.csv"
+    right_path = config.DATASET_DIR / f"{right}.csv"
+    if not (left_path.exists() and right_path.exists()):
+        return 0
+    column = config.SUBJECT_ID_COLUMN
+    left_ids = set(pd.read_csv(left_path, usecols=[column])[column])
+    right_ids = set(pd.read_csv(right_path, usecols=[column])[column])
+    return int(len(left_ids & right_ids))
+
+
 def build_benchmark_results(
     train: pd.DataFrame,
     test: pd.DataFrame,
@@ -462,14 +483,34 @@ def build(reports_dir: Path | None = None, seed: int = config.RANDOM_SEED) -> di
     # are generated here rather than by a separate script.
     triagegeist_dir = reports_dir / "triagegeist"
     triagegeist_dir.mkdir(parents=True, exist_ok=True)
+    # The profile is a published contract: the API serves it verbatim and
+    # both the "Model & dataset status" page and the dataset explorer read
+    # these fields. The flat train/test counts describe the *released files*
+    # (train.csv / test.csv); `row_counts` describes the modelling split
+    # carved out of train.csv for the holdout evaluation.
+    inventory = _file_inventory()
+    train_file = inventory.get("train.csv", {})
+    test_file = inventory.get("test.csv", {})
+    train_patients = _unique_patients("train")
+    test_patients = _unique_patients("test")
+    overlap = _patient_overlap("train", "test")
+
     profile = {
         "dataset": "Triagegeist",
         "version": "synthetic",
         "source": "triagegeist/",
+        "reference_dataset": "Triagegeist (synthetic)",
+        "split_protocol": "patient-grouped 80/20 holdout, 5-fold grouped CV",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "file_inventory": _file_inventory(),
+        "file_inventory": inventory,
+        "train_rows": train_file.get("rows"),
+        "train_patients": train_patients,
+        "test_rows": test_file.get("rows"),
+        "test_patients": test_patients,
+        "patient_overlap_train_test": overlap,
         "row_counts": quality["row_counts"],
         "target_distribution": quality["label_distribution"],
+        "target_distribution_train": quality["label_distribution"],
         "missing_percent": quality["missing_percent"],
         "feature_stats": quality["feature_stats"],
     }

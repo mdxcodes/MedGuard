@@ -7,7 +7,7 @@ export default function Footer() {
         <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary-soft flex items-center justify-center">
-              <Waves className="w-4 h-4 text-white" />
+              <Waves className="w-4 h-4 text-primary" />
             </div>
             <div className="leading-none">
               <div className="text-sm font-extrabold tracking-tight text-primary">MedGuard</div>

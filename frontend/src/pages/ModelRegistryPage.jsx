@@ -19,8 +19,9 @@ export default function ModelRegistryPage() {
           apiFetchOptional('/api/models/versions'),
         ]);
         if (!cancelled) {
-          setActive(activeRes?.data ?? null);
-          setVersions(Array.isArray(versionsRes?.data) ? versionsRes.data : []);
+          // apiFetchOptional resolves to the payload itself, not an envelope.
+          setActive(activeRes ?? null);
+          setVersions(Array.isArray(versionsRes) ? versionsRes : []);
         }
       } catch (e) {
         if (!cancelled) setError('Failed to load registry');
@@ -73,9 +74,41 @@ export default function ModelRegistryPage() {
               )}
             </div>
             <div className="mt-4 grid sm:grid-cols-2 gap-4">
-              <StatMetric value={active?.metadata?.training_rows ?? '—'} label="Training rows" subtitle="Unique patients: {active?.metadata?.training_patients ?? '—'}" tone="info" />
-              <StatMetric value={JSON.stringify(active?.metadata?.esi_labels ?? [])} label="ESI labels" subtitle={`Target: ${active?.metadata?.target ?? '—'}`} tone="info" />
+              <StatMetric
+                value={formatNumber(active?.metadata?.training_rows)}
+                label="Training rows"
+                subtitle={`Unique patients: ${formatNumber(active?.metadata?.training_patients)}`}
+                tone="info"
+              />
+              <StatMetric
+                value={(active?.metadata?.esi_labels ?? []).join(', ') || '—'}
+                label="ESI labels"
+                subtitle={`Target: ${active?.metadata?.target ?? '—'}`}
+                tone="info"
+              />
             </div>
+            {active?.metadata?.class_distribution && (
+              <div className="mt-4">
+                <div className="text-[10px] font-mono text-muted uppercase tracking-wider mb-2">
+                  Training class distribution
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {Object.entries(active.metadata.class_distribution).map(([label, count]) => (
+                    <div key={label} className="rounded-lg border border-border bg-surface-soft p-3">
+                      <div className="text-lg font-extrabold text-primary tabular-nums">
+                        {formatNumber(count)}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted mt-0.5">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {active?.metadata?.created_utc && (
+              <p className="mt-3 text-[10px] font-mono text-muted">
+                Artifact trained {active.metadata.created_utc} · seed {active.metadata.random_seed ?? '—'}
+              </p>
+            )}
             {active?.integrity?.errors && active.integrity.errors.length > 0 && (
               <div className="mt-3 rounded-lg border border-error/20 bg-error-bg p-3 text-[10px] font-mono text-error">
                 {JSON.stringify(active.integrity.errors)}
@@ -87,32 +120,50 @@ export default function ModelRegistryPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="text-left text-muted border-b border-border">
-                    <th className="py-3 pr-3 font-medium">Version</th>
-                    <th className="py-3 pr-3 font-medium">Model</th>
-                    <th className="py-3 pr-3 font-medium text-right">Active</th>
-                    <th className="py-3 pr-3 font-medium text-right">Integrity</th>
-                  </tr>
+                <tr className="text-left text-muted border-b border-border">
+                  <th className="py-3 pr-3 font-medium">Version</th>
+                  <th className="py-3 pr-3 font-medium">Model</th>
+                  <th className="py-3 pr-3 font-medium text-right">Active</th>
+                  <th className="py-3 pr-3 font-medium text-right">Integrity</th>
+                  <th className="py-3 pr-3 font-medium text-right">Train rows</th>
+                  <th className="py-3 pr-3 font-medium text-right">Dataset</th>
+                </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
-                  {versions.map((v, i) => (
-                    <tr key={i}>
-                      <td className="py-3 pr-3 font-mono font-medium text-primary">{v.version}</td>
-                      <td className="py-3 pr-3 font-mono text-secondary">{v.model_name}</td>
-                      <td className="py-3 pr-3 text-right">
-                        {v.active ? <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-primary-soft text-primary px-2 py-0.5 rounded">Yes</span> : 'No'}
-                      </td>
-                      <td className="py-3 pr-3 text-right">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-success-bg text-success px-2 py-0.5 rounded">
-                          <ShieldCheck className="w-2.5 h-2.5" /> OK
+              <tbody className="divide-y divide-border">
+                {versions.map((v, i) => (
+                  <tr key={v.version ?? i}>
+                    <td className="py-3 pr-3 font-mono font-medium text-primary">{v.version ?? '—'}</td>
+                    <td className="py-3 pr-3 font-mono text-secondary">{v.model_name ?? '—'}</td>
+                    <td className="py-3 pr-3 text-right">
+                      {v.active ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-primary text-primary-contrast px-2 py-0.5 rounded">
+                          Yes
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {versions.length === 0 && (
-                    <tr><td colSpan="4" className="py-6 text-center text-muted">No versions registered.</td></tr>
-                  )}
-                </tbody>
+                      ) : (
+                        <span className="text-[10px] font-mono text-muted">No</span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3 text-right">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-success-bg text-success px-2 py-0.5 rounded">
+                        <ShieldCheck className="w-2.5 h-2.5" /> OK
+                      </span>
+                    </td>
+                    <td className="py-3 pr-3 text-right font-mono text-[10px] text-muted">
+                      {formatNumber(v.training_rows)}
+                    </td>
+                    <td className="py-3 pr-3 text-right font-mono text-[10px] text-muted">
+                      {v.dataset ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+                {versions.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="py-6 text-center text-muted">
+                      No versions registered.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
               </table>
             </div>
           </SectionCard>
@@ -120,4 +171,8 @@ export default function ModelRegistryPage() {
       )}
     </div>
   );
+}
+
+function formatNumber(n) {
+  return n == null || n === '' ? '—' : Number(n).toLocaleString();
 }

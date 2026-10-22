@@ -15,8 +15,12 @@ export default function OverviewPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiFetch('/metrics');
-        setMetrics(data);
+        const result = await apiFetch('/api/metrics');
+        if (!result.ok) {
+          setError(result.error?.message || 'Failed to load evaluation metrics.');
+          return;
+        }
+        setMetrics(result.data);
       } catch (e) {
         setError('Failed to load evaluation metrics.');
       } finally {
@@ -79,7 +83,7 @@ export default function OverviewPage() {
                   const params = Object.entries(sample).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
                   window.location.href = `/assessment?${params}`;
                 }}
-                className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold px-5 py-3 rounded-xl shadow-lg shadow-primary/20 transition"
+                className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-primary-contrast font-semibold px-5 py-3 rounded-xl shadow-lg shadow-primary/20 transition"
               >
                 <Activity className="w-4 h-4" /> Respiratory Distress
               </button>
@@ -110,7 +114,12 @@ export default function OverviewPage() {
         <div className="lg:col-span-4 space-y-6">
           <StatMetric value={m.model_name ?? 'Random Forest'} label="Active Model" subtitle={ds.random_seed ? `seed ${ds.random_seed}` : ''} tone="info" />
           <StatMetric value={cv.mean_macro_f1?.toFixed(3) ?? '—'} label="Macro-F1 (CV)" subtitle={`± ${cv.std_macro_f1?.toFixed(3)} across ${cv.n_folds ?? 5} folds`} tone="primary" />
-          <StatMetric value={`${ds.test_rows ?? '—'} / ${ds.test_patients ?? '—'}`} label="Holdout Cohort" subtitle="Visits / patients — grouped split" tone="warning" />
+          <StatMetric
+            value={`${ds.row_counts?.test_rows?.toLocaleString() ?? '—'} / ${ds.row_counts?.test_patients?.toLocaleString() ?? '—'}`}
+            label="Holdout Cohort"
+            subtitle="Visits / patients — grouped split"
+            tone="warning"
+          />
         </div>
       </section>
 
@@ -176,19 +185,19 @@ export default function OverviewPage() {
           <SectionCard title="Read Before Proceeding" badge="Limitations" icon={<AlertTriangle className="w-4 h-4" />}>
             <ul className="space-y-3 text-sm text-secondary leading-relaxed">
               <li className="flex gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-warning/50 shrink-0 mt-1" />
                 <span className="flex-1"><strong>Accuracy alone is misleading.</strong> With severe class imbalance toward ESI 2–3, macro-F1 and balanced accuracy correct for imbalance.</span>
               </li>
               <li className="flex gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-warning/50 shrink-0 mt-1" />
                 <span className="flex-1"><strong>Grouped cross-validation is mandatory.</strong> Patient-grouped splitting prevents leakage from repeated encounters.</span>
               </li>
               <li className="flex gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-warning/50 shrink-0 mt-1" />
                 <span className="flex-1"><strong>All five ESI levels are present.</strong> Triagegeist supplies labelled examples for every level, though the least common level (ESI 1) is far rarer than the dominant ones.</span>
               </li>
               <li className="flex gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-warning/50 shrink-0 mt-1" />
                 <span className="flex-1"><strong>Synthetic dataset.</strong> {totalRows.toLocaleString()} visits demonstrates methodology, not clinical performance.</span>
               </li>
             </ul>
@@ -215,7 +224,7 @@ export default function OverviewPage() {
           ].map(step => (
             <a key={step.title} href="/methodology" className="p-4 rounded-xl bg-surface border border-border hover:border-primary/20 hover:shadow-md transition group">
               <step.icon className="w-4 h-4 text-primary mb-2" />
-              <div className="font-bold text-sm text-primary tracking-tight group-hover:text-primary-soft transition">{step.title}</div>
+              <div className="font-bold text-sm text-primary tracking-tight group-hover:text-primary-muted transition">{step.title}</div>
               <div className="text-xs text-muted mt-1 leading-snug">{step.desc}</div>
             </a>
           ))}
@@ -225,5 +234,5 @@ export default function OverviewPage() {
   );
 }
 
-const TONE_MAP = { teal: 'bg-teal', rose: 'bg-rose-400', amber: 'bg-amber-400', slate: 'bg-slate-400' };
-function getToneColor(tone) { return TONE_MAP[tone] ?? 'bg-slate-400'; }
+const TONE_MAP = { teal: 'bg-primary', rose: 'bg-esi-1/20', amber: 'bg-esi-2/20', slate: 'bg-esi-3/20' };
+function getToneColor(tone) { return TONE_MAP[tone] ?? 'bg-esi-3/20'; }

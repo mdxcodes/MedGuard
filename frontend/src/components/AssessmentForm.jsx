@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ArrowRight, RotateCcw, AlertCircle } from 'lucide-react';
 import SyntheticExamples from './SyntheticExamples';
+import { FormField, MeasurementInput, SelectInput, controlClass } from './ui/FormField';
 
-const INITIAL = {
+export const INITIAL = {
   heart_rate: '',
   respiratory_rate: '',
   temperature_c: '',
@@ -21,18 +22,77 @@ const INITIAL = {
   num_active_medications: '',
 };
 
-export default function AssessmentForm({ onSubmit, isSubmitting }) {
-  const [values, setValues] = useState(INITIAL);
+/**
+ * The option lists are the categories the model was actually trained on
+ * (the raw Triagegeist values). A value outside these sets is ignored by the
+ * fitted encoder, so offering anything else would silently remove the
+ * feature from the prediction.
+ */
+const SELECT_OPTIONS = {
+  arrival_mode: [
+    'walk-in',
+    'ambulance',
+    'transfer',
+    'brought_by_family',
+    'police',
+    'helicopter',
+  ],
+  sex: ['F', 'M', 'Other'],
+  insurance_type: ['public', 'private', 'military', 'none', 'unknown'],
+  chief_complaint_system: [
+    'cardiovascular',
+    'respiratory',
+    'neurological',
+    'gastrointestinal',
+    'musculoskeletal',
+    'trauma',
+    'psychiatric',
+    'infectious',
+    'endocrine',
+    'dermatological',
+    'genitourinary',
+    'ophthalmic',
+    'ENT',
+    'other',
+  ],
+};
+
+const NUMERIC_FIELDS = [
+  { name: 'heart_rate', label: 'Heart Rate', unit: 'bpm', step: 1, placeholder: '88' },
+  { name: 'respiratory_rate', label: 'Resp. Rate', unit: '/min', step: 1, placeholder: '16' },
+  { name: 'temperature_c', label: 'Temperature', unit: '°C', step: 0.1, placeholder: '37.0' },
+  { name: 'spo2', label: 'O₂ Saturation', unit: '%', step: 1, placeholder: '98' },
+  { name: 'systolic_bp', label: 'Systolic BP', unit: 'mmHg', step: 1, placeholder: '120' },
+  { name: 'diastolic_bp', label: 'Diastolic BP', unit: 'mmHg', step: 1, placeholder: '80' },
+];
+
+/**
+ * Research Lab assessment form.
+ *
+ * When `onChange` is supplied the form is controlled by the shared
+ * assessment store, so the entered values survive a mode switch. When it is
+ * not, the form keeps its own state and behaves as before.
+ */
+export default function AssessmentForm({ onSubmit, isSubmitting, initialValues, onChange }) {
+  const [localValues, setLocalValues] = useState(() => ({ ...INITIAL, ...(initialValues || {}) }));
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
+  const controlled = typeof onChange === 'function';
+  const values = controlled ? { ...INITIAL, ...(initialValues || {}) } : localValues;
+
   const update = (k, v) => {
-    setValues(p => ({ ...p, [k]: v }));
-    if (errors[k]) setErrors(prev => ({ ...prev, [k]: null }));
-    setTouched(p => ({ ...p, [k]: true }));
+    if (controlled) onChange(k, v);
+    else setLocalValues((p) => ({ ...p, [k]: v }));
+    if (errors[k]) setErrors((prev) => ({ ...prev, [k]: null }));
+    setTouched((p) => ({ ...p, [k]: true }));
   };
 
-  const applySample = (v) => setValues({ ...INITIAL, ...v });
+  const applySample = (v) => {
+    const next = { ...INITIAL, ...v };
+    if (controlled) Object.entries(v).forEach(([key, value]) => onChange(key, value));
+    else setLocalValues(next);
+  };
 
   const validate = () => {
     const e = {};
@@ -52,29 +112,16 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
   const handleSubmit = (ev) => {
     ev.preventDefault();
     if (validate()) {
-      const payload = {
-        heart_rate: values.heart_rate === '' ? undefined : Number(values.heart_rate),
-        respiratory_rate: values.respiratory_rate === '' ? undefined : Number(values.respiratory_rate),
-        temperature_c: values.temperature_c === '' ? undefined : Number(values.temperature_c),
-        spo2: values.spo2 === '' ? undefined : Number(values.spo2),
-        systolic_bp: values.systolic_bp === '' ? undefined : Number(values.systolic_bp),
-        diastolic_bp: values.diastolic_bp === '' ? undefined : Number(values.diastolic_bp),
-        pain_score: values.pain_score === '' ? undefined : Number(values.pain_score),
-        arrival_mode: values.arrival_mode || undefined,
-        chief_complaint_system: values.chief_complaint_system || undefined,
-        age: values.age === '' ? undefined : Number(values.age),
-        sex: values.sex || undefined,
-        insurance_type: values.insurance_type || undefined,
-        arrival_hour: values.arrival_hour === '' ? undefined : Number(values.arrival_hour),
-        shock_index: values.shock_index === '' ? undefined : Number(values.shock_index),
-        num_prior_ed_visits_12m: values.num_prior_ed_visits_12m === '' ? undefined : Number(values.num_prior_ed_visits_12m),
-        num_active_medications: values.num_active_medications === '' ? undefined : Number(values.num_active_medications),
-      };
+      const payload = {};
+      for (const [key, value] of Object.entries(values)) {
+        if (value === '' || value === null || value === undefined) continue;
+        payload[key] = typeof value === 'number' ? value : (key === 'arrival_hour' || key === 'shock_index' || key === 'num_prior_ed_visits_12m' || key === 'num_active_medications' ? Number(value) : value);
+      }
       onSubmit(payload);
     }
   };
 
-  const inputClass = (k) => `w-full px-3 py-3 rounded-lg border text-sm font-medium transition bg-surface focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary ${errors[k] ? 'border-error bg-error-bg/30' : 'border-border hover:border-secondary/40'}`;
+  const inputClass = (k) => controlClass(errors[k]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8" aria-label="Triage assessment form" noValidate>
@@ -82,12 +129,28 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
       <section aria-labelledby="vs-heading" className="space-y-6">
         <h2 id="vs-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Vital Signs</h2>
         <div className="grid sm:grid-cols-3 gap-3">
-          <Field label="Heart Rate" unit="bpm" name="heart_rate" value={values.heart_rate} onChange={v => update('heart_rate', v)} error={errors.heart_rate} placeholder="88" className={inputClass('heart_rate')} />
-          <Field label="Resp. Rate" unit="/min" name="respiratory_rate" value={values.respiratory_rate} onChange={v => update('respiratory_rate', v)} error={errors.respiratory_rate} placeholder="16" className={inputClass('respiratory_rate')} />
-          <Field label="Temperature" unit="°C" name="temperature_c" value={values.temperature_c} onChange={v => update('temperature_c', v)} error={errors.temperature_c} placeholder="37.0" className={inputClass('temperature_c')} />
-          <Field label="O₂ Saturation" unit="%" name="spo2" value={values.spo2} onChange={v => update('spo2', v)} error={errors.spo2} placeholder="98" className={inputClass('spo2')} />
-          <Field label="Systolic BP" unit="mmHg" name="systolic_bp" value={values.systolic_bp} onChange={v => update('systolic_bp', v)} error={errors.systolic_bp} placeholder="120" className={inputClass('systolic_bp')} />
-          <Field label="Diastolic BP" unit="mmHg" name="diastolic_bp" value={values.diastolic_bp} onChange={v => update('diastolic_bp', v)} error={errors.diastolic_bp} placeholder="80" className={inputClass('diastolic_bp')} />
+          {NUMERIC_FIELDS.map((field) => (
+            <FormField
+              key={field.name}
+              id={field.name}
+              label={field.label}
+              unit={field.unit}
+              error={errors[field.name]}
+            >
+              {(controlProps) => (
+                <MeasurementInput
+                  id={field.name}
+                  value={values[field.name]}
+                  onChange={(v) => update(field.name, v)}
+                  error={errors[field.name]}
+                  min={0}
+                  step={field.step}
+                  placeholder={field.placeholder}
+                  {...controlProps}
+                />
+              )}
+            </FormField>
+          ))}
         </div>
       </section>
 
@@ -95,55 +158,183 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
       <section aria-labelledby="ctx-heading" className="space-y-6">
         <h2 id="ctx-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Pain & Demographics</h2>
         <div className="grid sm:grid-cols-2 gap-3 lg:gap-6">
-          <div>
-            <Field
-              label="Pain Score" unit="0–10" name="pain_score" value={values.pain_score}
-              onChange={v => update('pain_score', v)} error={errors.pain_score} placeholder="3" className={inputClass('pain_score')}
-              hint="Numeric 0–10 scale."
-            />
-          </div>
-          <div>
-            <Field
-              label="Age" unit="years" name="age" value={values.age}
-              onChange={v => update('age', v)} error={errors.age} placeholder="45" className={inputClass('age')}
-              hint="Patient age in years."
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <FieldSelect
-              label="Arrival Mode" name="arrival_mode" value={values.arrival_mode}
-              onChange={e => update('arrival_mode', e.target.value)} error={errors.arrival_mode}
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <FieldSelect
-              label="Sex" name="sex" value={values.sex}
-              onChange={e => update('sex', e.target.value)} error={errors.sex}
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <FieldSelect
-              label="Insurance Type" name="insurance_type" value={values.insurance_type}
-              onChange={e => update('insurance_type', e.target.value)} error={errors.insurance_type}
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <FieldSelect
-              label="Chief Complaint" name="chief_complaint_system" value={values.chief_complaint_system}
-              onChange={e => update('chief_complaint_system', e.target.value)} error={errors.chief_complaint_system}
-            />
-          </div>
+          <FormField
+            id="pain_score"
+            label="Pain Score"
+            unit="0–10"
+            error={errors.pain_score}
+            hint="Numeric 0–10 scale."
+          >
+            {(controlProps) => (
+              <MeasurementInput
+                id="pain_score"
+                value={values.pain_score}
+                onChange={(v) => update('pain_score', v)}
+                error={errors.pain_score}
+                min={0}
+                max={10}
+                step={1}
+                placeholder="3"
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField
+            id="age"
+            label="Age"
+            unit="years"
+            error={errors.age}
+            hint="Patient age in years."
+          >
+            {(controlProps) => (
+              <MeasurementInput
+                id="age"
+                value={values.age}
+                onChange={(v) => update('age', v)}
+                error={errors.age}
+                min={0}
+                max={120}
+                step={1}
+                placeholder="45"
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="arrival_mode" label="Arrival Mode" error={errors.arrival_mode} className="lg:col-span-2">
+            {(controlProps) => (
+              <SelectInput
+                id="arrival_mode"
+                value={values.arrival_mode}
+                onChange={(v) => update('arrival_mode', v)}
+                options={SELECT_OPTIONS.arrival_mode}
+                error={errors.arrival_mode}
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="sex" label="Sex" error={errors.sex} className="lg:col-span-2">
+            {(controlProps) => (
+              <SelectInput
+                id="sex"
+                value={values.sex}
+                onChange={(v) => update('sex', v)}
+                options={SELECT_OPTIONS.sex}
+                error={errors.sex}
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="insurance_type" label="Insurance Type" error={errors.insurance_type} className="lg:col-span-2">
+            {(controlProps) => (
+              <SelectInput
+                id="insurance_type"
+                value={values.insurance_type}
+                onChange={(v) => update('insurance_type', v)}
+                options={SELECT_OPTIONS.insurance_type}
+                error={errors.insurance_type}
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="chief_complaint_system" label="Chief Complaint" error={errors.chief_complaint_system} className="lg:col-span-2">
+            {(controlProps) => (
+              <SelectInput
+                id="chief_complaint_system"
+                value={values.chief_complaint_system}
+                onChange={(v) => update('chief_complaint_system', v)}
+                options={SELECT_OPTIONS.chief_complaint_system}
+                error={errors.chief_complaint_system}
+                {...controlProps}
+              />
+            )}
+          </FormField>
+        </div>
+      </section>
+
+      {/* Derived / contextual */}
+      <section aria-labelledby="ctx2-heading" className="space-y-6">
+        <h2 id="ctx2-heading" className="text-xs font-mono text-muted uppercase tracking-widest font-semibold">Derived &amp; Contextual</h2>
+        <div className="grid sm:grid-cols-2 gap-3 lg:gap-6">
+          <FormField id="arrival_hour" label="Arrival Hour" unit="0–23" error={errors.arrival_hour}>
+            {(controlProps) => (
+              <MeasurementInput
+                id="arrival_hour"
+                value={values.arrival_hour}
+                onChange={(v) => update('arrival_hour', v)}
+                error={errors.arrival_hour}
+                min={0}
+                max={23}
+                step={1}
+                placeholder="14"
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="shock_index" label="Shock Index" unit="ratio" error={errors.shock_index}>
+            {(controlProps) => (
+              <MeasurementInput
+                id="shock_index"
+                value={values.shock_index}
+                onChange={(v) => update('shock_index', v)}
+                error={errors.shock_index}
+                min={0}
+                step={0.01}
+                placeholder="0.73"
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="num_prior_ed_visits_12m" label="Prior ED Visits (12m)" unit="count" error={errors.num_prior_ed_visits_12m}>
+            {(controlProps) => (
+              <MeasurementInput
+                id="num_prior_ed_visits_12m"
+                value={values.num_prior_ed_visits_12m}
+                onChange={(v) => update('num_prior_ed_visits_12m', v)}
+                error={errors.num_prior_ed_visits_12m}
+                min={0}
+                step={1}
+                placeholder="2"
+                {...controlProps}
+              />
+            )}
+          </FormField>
+          <FormField id="num_active_medications" label="Active Medications" unit="count" error={errors.num_active_medications}>
+            {(controlProps) => (
+              <MeasurementInput
+                id="num_active_medications"
+                value={values.num_active_medications}
+                onChange={(v) => update('num_active_medications', v)}
+                error={errors.num_active_medications}
+                min={0}
+                step={1}
+                placeholder="3"
+                {...controlProps}
+              />
+            )}
+          </FormField>
         </div>
       </section>
 
       {/* Submit */}
       <div className="flex items-center gap-3 pt-4 border-t border-border">
-        <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-6 py-3.5 rounded-xl shadow-lg shadow-primary/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-primary-contrast font-semibold text-sm px-6 py-3.5 rounded-xl shadow-lg shadow-primary/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
           {isSubmitting ? 'Submitting…' : 'Submit Assessment'}
-          {!isSubmitting && <ArrowRight className="w-4 h-4" />}
+          {!isSubmitting && <ArrowRight className="w-4 h-4" aria-hidden="true" />}
         </button>
-        <button type="button" onClick={() => { setValues(INITIAL); setErrors({}); setTouched({}); }} className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3.5 rounded-xl hover:bg-surface-lift transition border border-border">
-          <RotateCcw className="w-4 h-4" /> Reset
+        <button
+          type="button"
+          onClick={() => {
+            if (controlled) {
+              Object.keys(INITIAL).forEach((key) => onChange(key, ''));
+            } else {
+              setLocalValues(INITIAL);
+            }
+            setErrors({});
+            setTouched({});
+          }}
+          className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3.5 rounded-xl hover:bg-surface-lift transition border border-border"
+        >
+          <RotateCcw className="w-4 h-4" aria-hidden="true" /> Reset
         </button>
         <span className="text-[10px] font-mono text-muted ml-auto">Synthetic input — not a real patient</span>
       </div>
@@ -154,78 +345,4 @@ export default function AssessmentForm({ onSubmit, isSubmitting }) {
       </div>
     </form>
   );
-}
-
-function Field({ label, unit, name, value, onChange, error, placeholder, className, hint }) {
-  return (
-    <div>
-      <div className="flex items-baseline gap-1 mb-1.5">
-        <label htmlFor={name} className="text-xs font-semibold text-secondary">{label}</label>
-        {unit && <span className="text-[10px] font-mono text-muted">{unit}</span>}
-      </div>
-      <input
-        id={name}
-        type="number"
-        step={name === 'pain_score' ? 1 : 0.1}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className={className}
-        placeholder={placeholder}
-        aria-invalid={!!error}
-        aria-describedby={error ? `${name}-err` : undefined}
-      />
-      {error && <div id={`${name}-err`} className="text-[10px] text-error mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {error}</div>}
-      {hint && <div className="text-[10px] text-muted mt-1">{hint}</div>}
-    </div>
-  );
-}
-
-function FieldText({ label, name, value, onChange, error, placeholder, hint }) {
-  return (
-    <div>
-      <div className="flex items-baseline gap-1 mb-1.5">
-        <label htmlFor={name} className="text-xs font-semibold text-secondary">{label}</label>
-      </div>
-      <input
-        id={name}
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className={`w-full px-3 py-3 rounded-lg border text-sm font-medium transition bg-surface focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary ${error ? 'border-error bg-error-bg/30' : 'border-border hover:border-secondary/40'}`}
-        placeholder={placeholder}
-        aria-invalid={!!error}
-        aria-describedby={error ? `${name}-err` : undefined}
-      />
-      {error && <div id={`${name}-err`} className="text-[10px] text-error mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {error}</div>}
-      {hint && <div className="text-[10px] text-muted mt-1">{hint}</div>}
-    </div>
-  );
-}
-
-function FieldSelect({ label, name, value, onChange, error }) {
-  const optionsMap = {
-    arrival_mode: ['AMBULANCE', 'WALK IN', 'OTHER', 'UNKNOWN'],
-    sex: ['M', 'F', 'Other', 'Unknown'],
-    insurance_type: ['Private', 'Medicare', 'Medicaid', 'Self-pay', 'Other', 'Unknown'],
-    chief_complaint_system: ['Cardiovascular', 'Respiratory', 'Neurological', 'Abdominal', 'Trauma', 'Other', 'Unknown'],
-  };
-  const options = optionsMap[name] || [];
-  return (
-    <div>
-      <div className="flex items-baseline gap-1 mb-1.5">
-        <label htmlFor={name} className="text-xs font-semibold text-secondary">{label}</label>
-      </div>
-      <select id={name} value={value} onChange={e => onChange(e.target.value)} className={inputClassForSelect(error)}>
-        <option value="">Select…</option>
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-      {error && <div id={`${name}-err`} className="text-[10px] text-error mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {error}</div>}
-    </div>
-  );
-}
-
-function inputClassForSelect(error) {
-  return `w-full px-3 py-3 rounded-lg border text-sm font-medium transition bg-surface focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath fill=%22none%22 stroke=%22%23475569%22 stroke-width=%221.5%22 d=%22M2 4l4 4 4-4%22/%3E%3C/svg%3E')] bg-no-repeat bg-[right_10px_center] pr-8 ${error ? 'border-error bg-error-bg/30' : 'border-border hover:border-secondary/40'}`;
 }

@@ -3,25 +3,42 @@ import { ArrowUpRight, RefreshCcw } from 'lucide-react';
 import PredictionResults from '../components/PredictionResults';
 import { PageShell, LoadingState, EmptyState } from '../components/ui/states';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAssessment } from '../app/AssessmentProvider';
 
+/**
+ * Research Lab result view.
+ *
+ * It renders the response stored by the shared assessment store — the same
+ * object the Patient Mode result page renders. Router state is accepted as a
+ * fallback so a result handed over by navigation still displays.
+ *
+ * It never issues a prediction request of its own.
+ */
 export default function PredictionPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { result: storedResult, submittedPayload } = useAssessment();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Use the submitted assessment result passed from AssessmentPage via router state
+    // Prefer the shared store; fall back to router state for a hand-over.
     const state = location.state || {};
+    if (storedResult) {
+      setData({ ...storedResult, _submittedInput: submittedPayload || state.payload });
+      setLoading(false);
+      return;
+    }
     if (state.result) {
       setData({ ...state.result, _submittedInput: state.payload });
+      setLoading(false);
       return;
     }
     // Direct navigation without a prior result — show empty state
     setData(null);
     setLoading(false);
-  }, [location]);
+  }, [location, storedResult, submittedPayload]);
 
   const startNewAssessment = () => {
     navigate('/assessment');
@@ -32,7 +49,7 @@ export default function PredictionPage() {
       <PageShell
         title="Prediction analysis"
         subtitle="View the real model response for your submitted assessment."
-        breadcrumb="Workspace · Prediction Results"
+        breadcrumb="Research Lab · Prediction Results"
       />
 
       {/* Empty state: no result available (direct navigation) */}
@@ -67,11 +84,11 @@ export default function PredictionPage() {
                 <div className="text-xs text-secondary mt-1">{error}</div>
               </div>
             </div>
-            <button
-              onClick={startNewAssessment}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline font-mono"
-            >
-              <ArrowUpRight className="w-3 h-3" /> Start new assessment
+              <button
+                onClick={startNewAssessment}
+                className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary-contrast bg-primary hover:bg-primary-hover px-3 py-1.5 rounded-lg"
+              >
+              <ArrowUpRight className="w-3 h-3" aria-hidden="true" /> Start new assessment
             </button>
           </div>
         </div>

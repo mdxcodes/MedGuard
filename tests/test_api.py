@@ -8,6 +8,7 @@ production deployment, no external secrets.
 from __future__ import annotations
 
 import json
+import re
 import pandas as pd
 import tempfile
 from pathlib import Path
@@ -256,9 +257,23 @@ class TestSafety:
         resp = client.post("/predict", json=synthetic_assessment.model_dump())
         assert resp.status_code == 200
         text = resp.text
-        # Synthetic patient_ids contain 4-digit numbers; reject those leaking.
+
+        # The identifier that was submitted must not be echoed back.
+        assert synthetic_assessment.patient_id not in text
+
+        # No identifier-shaped field may appear in the payload.
+        payload = resp.json()
+        for forbidden in ("patient_id", "subject_id", "stay_id", "visit_id"):
+            assert forbidden not in payload
+
+        # Numeric literals are removed before scanning for identifier-shaped
+        # strings: a four-digit run inside a float (for example a SHAP value
+        # such as 0.03127900192145788) is a coincidence, not a leak.
+        without_numbers = re.sub(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", " ", text)
         for pid in ("9001", "9002", "9003"):
-            assert pid not in text, f"Patient identifier {pid} leaked into response"
+            assert pid not in without_numbers, (
+                f"Patient identifier {pid} leaked into response"
+            )
 
     def test_no_stack_traces_exposed(self, client, synthetic_assessment):
         # Even when something goes wrong, stack traces must not leak.

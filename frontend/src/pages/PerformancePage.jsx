@@ -45,7 +45,7 @@ export default function PerformancePage() {
       </div>
 
       {/* Headline metrics */}
-      <SectionCard title="Cross-validation summary" badge="5-fold patient-grouped">
+      <SectionCard id="cross-validation" title="Cross-validation summary" badge="5-fold patient-grouped">
         <div className="grid sm:grid-cols-3 gap-4">
           <StatMetric
             value={fmt(CV_SUMMARY.mean_macro_f1)}
@@ -90,7 +90,7 @@ export default function PerformancePage() {
           </SectionCard>
         </div>
         <div className="lg:col-span-5">
-          <SectionCard title="Confusion matrix" badge="CV aggregate · true → predicted">
+          <SectionCard id="confusion-matrix" title="Confusion matrix" badge="CV aggregate · true → predicted">
             <ConfusionMatrix matrix={AGG_CM} labels={ESI_LABELS} />
           </SectionCard>
         </div>
@@ -121,7 +121,7 @@ export default function PerformancePage() {
       </SectionCard>
 
       {/* Per class */}
-      <SectionCard title="Per-class performance" badge="Held-out split">
+      <SectionCard id="per-class" title="Per-class performance" badge="Held-out split">
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>

@@ -26,6 +26,13 @@ DATASET_DIR = PROJECT_ROOT / "triagegeist"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 DOCS_DIR = PROJECT_ROOT / "docs"
 
+#: Directory holding the active (served) model artifact and its manifest.
+#: The model registry and the API both resolve the model through these
+#: constants so they can never disagree about which artifact is live.
+MODELS_DIR = PROJECT_ROOT / "models" / "triagegeist"
+MODEL_PATH = MODELS_DIR / "triage_model.joblib"
+MANIFEST_PATH = MODELS_DIR / "triage_model.manifest.json"
+
 #: Reproducibility: fixed seed recorded in docs/ML_PIPELINE_DESIGN.md.
 RANDOM_SEED = 20260915
 

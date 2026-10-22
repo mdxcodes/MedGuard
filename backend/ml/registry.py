@@ -9,8 +9,13 @@ from typing import Any, Dict, List
 from backend.ml import config
 
 
-MODELS_DIR = config.PROJECT_ROOT / "models"
+#: The registry describes the model the application actually serves. These
+#: come from the ML config so the registry and the API can never point at
+#: different artifacts.
+MODELS_DIR = config.MODELS_DIR
 REPORTS_DIR = config.REPORTS_DIR
+MANIFEST_PATH = config.MANIFEST_PATH
+MODEL_PATH = config.MODEL_PATH
 
 
 def sha256_file(p: Path) -> str:
@@ -22,7 +27,7 @@ def sha256_file(p: Path) -> str:
 
 
 def load_manifest(manifest_path: Path | None = None) -> Dict[str, Any]:
-    p = manifest_path or (MODELS_DIR / "triage_model.manifest.json")
+    p = manifest_path or MANIFEST_PATH
     if not p.exists():
         raise FileNotFoundError(f"Manifest not found: {p}")
     with open(p, "r", encoding="utf-8") as f:
@@ -30,11 +35,11 @@ def load_manifest(manifest_path: Path | None = None) -> Dict[str, Any]:
 
 
 def check_integrity(manifest: Dict[str, Any], manifest_path: Path | None = None) -> Dict[str, Any]:
-    mp = manifest_path or (MODELS_DIR / "triage_model.manifest.json")
+    mp = manifest_path or MANIFEST_PATH
     result = {"ok": True, "checks": [], "errors": []}
     checksums = manifest.get("artifact_checksums", {})
     if checksums.get("model_sha256"):
-        model_file = MODELS_DIR / manifest.get("artifact_filenames", {}).get("model", "triage_model.joblib")
+        model_file = MODELS_DIR / manifest.get("artifact_filenames", {}).get("model", MODEL_PATH.name)
         if model_file.exists():
             actual = sha256_file(model_file)
             expected = checksums["model_sha256"]
@@ -55,8 +60,10 @@ def list_versions() -> List[Dict[str, Any]]:
         "version": m.get("manifest_version") or m.get("version") or "v1",
         "model_name": m.get("model_name"),
         "active": True,
-        "manifest_path": str(MODELS_DIR / "triage_model.manifest.json"),
-        "model_path": str(MODELS_DIR / "triage_model.joblib"),
+        "manifest_path": str(MANIFEST_PATH),
+        "model_path": str(MODEL_PATH),
+        "dataset": m.get("dataset"),
+        "training_rows": m.get("training_rows"),
     }]
 
 
@@ -68,5 +75,23 @@ def get_active_version() -> Dict[str, Any]:
         "model_name": m.get("model_name"),
         "active": True,
         "integrity": integ,
-        "metadata": {k: m.get(k) for k in ["dataset", "training_rows", "training_patients", "esi_labels", "target"]},
+        "metadata": {
+            k: m.get(k)
+            for k in [
+                "dataset",
+                "training_rows",
+                "training_patients",
+                "esi_labels",
+                "target",
+                "class_distribution",
+                "random_seed",
+                "created_utc",
+            ]
+        },
+        "artifact": {
+            "model_path": str(MODEL_PATH),
+            "manifest_path": str(MANIFEST_PATH),
+            "model_exists": MODEL_PATH.exists(),
+            "manifest_exists": MANIFEST_PATH.exists(),
+        },
     }

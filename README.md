@@ -9,6 +9,23 @@ MedGuard is an educational AI/ML research prototype for emergency-department tri
 **Performance:** Macro-F1 0.8421 ± 0.0019 (5-fold patient-grouped CV), Macro-F1 0.8418 (holdout).
 **Artifacts:** `models/triagegeist/triage_model.joblib` + manifest.
 
+## Two Interfaces, One Application
+
+MedGuard presents the same model through two interfaces, switched from the top
+navigation. Both use the **same backend, the same model and the same prediction
+request** — the mode changes only what is rendered.
+
+| | Patient Mode | Research Lab |
+|---|---|---|
+| Audience | Anyone with an assessment result | Researchers and reviewers |
+| Navigation | Home · New Assessment · My Result · About | 13 research pages, grouped |
+| Assessment | Four-step guided wizard, plain language | The full technical form |
+| Result | Plain-language summary, no raw SHAP | Probabilities, SHAP, warnings, metadata |
+| Palette | Warm charcoal, roomy cards, larger type | Cool navy, dense, technical |
+
+Patient Mode is the default for a new visitor. The full implementation record is
+in `DUAL_MODE_UI_IMPLEMENTATION_REPORT.md`.
+
 ## Repository Structure
 
 ```
@@ -38,12 +55,20 @@ MedGuard is an educational AI/ML research prototype for emergency-department tri
 │   └── ...
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/            # React pages (Overview, Assessment, Prediction, etc.)
-│   │   ├── components/       # React components (AssessmentForm, PredictionResults, etc.)
-│   │   ├── lib/api.js        # API fetch wrapper
-│   │   ├── ui/states.jsx     # Shared UI state components
-│   │   └── App.jsx           # App router
+│   │   ├── app/              # ModeProvider · AssessmentProvider · ModelStatusProvider · AppShell
+│   │   ├── lib/              # api.js · modeStorage · modeRoutes · assessment (shared contract)
+│   │   ├── components/
+│   │   │   ├── mode-switcher/  # ModeSwitcher · ModeTransition
+│   │   │   ├── patient/         # Patient layout, wizard, result
+│   │   │   ├── research/        # Research navigation
+│   │   │   └── ui/              # FormField · ProgressSteps · states
+│   │   ├── pages/            # React pages — 13 research pages + pages/patient/
+│   │   ├── hooks/            # useMediaQuery
+│   │   ├── test/             # Test helpers and setup
+│   │   └── App.jsx           # Provider stack + app router
+│   ├── scripts/screenshot.mjs  # Headless-Chrome visual capture (DevTools Protocol)
 │   ├── dist/                 # Production build output
+│   ├── vitest.config.js      # jsdom test environment
 │   └── package.json
 ├── triagegeist/              # Triagegeist synthetic dataset (CSV files)
 │   ├── train.csv             # 80,000 labelled visits
@@ -53,7 +78,8 @@ MedGuard is an educational AI/ML research prototype for emergency-department tri
 │   └── sample_submission.csv # Competition submission template
 ├── models/
 │   └── triagegeist/          # Model artifacts
-│       ├── triage_model.joblib
+│       ├── triagegeist/
+│       │   ├── triage_model.joblib
 │       └── triage_model.manifest.json
 ├── reports/                  # Evaluation artifacts
 │   ├── model_evaluation.json       # Holdout + CV evaluation
@@ -77,7 +103,8 @@ MedGuard is an educational AI/ML research prototype for emergency-department tri
 ├── tests/                    # Backend test suite
 ├── .gitignore
 ├── README.md
-└── TRIAGEGEIST_MIGRATION_REPORT.md   # Full migration record
+├── TRIAGEGEIST_MIGRATION_REPORT.md   # Full migration record
+└── DUAL_MODE_UI_IMPLEMENTATION_REPORT.md  # Dual-mode UI implementation record
 ```
 
 ## Quick Start

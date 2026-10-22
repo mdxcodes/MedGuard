@@ -28,8 +28,8 @@
   "systolic_bp": 120.0,
   "diastolic_bp": 80.0,
   "pain_score": 3.0,
-  "arrival_mode": "AMBULANCE",
-  "chief_complaint_system": "Cardiovascular",
+  "arrival_mode": "ambulance",
+  "chief_complaint_system": "cardiovascular",
   "age": 45.0,
   "sex": "F"
 }
@@ -39,6 +39,20 @@ Every field is optional. A missing vital is treated as informative: it is
 imputed with the training median and flagged with a missingness indicator
 rather than rejected. `patient_id` is an opaque debug label and must never
 carry real patient PII.
+
+**Categorical values** are matched against the categories the model was
+trained on, ignoring case and separators, and returned in the canonical
+spelling (`"Walk In"` → `walk-in`, `"Cardiovascular"` → `cardiovascular`). A
+value that matches no trained category falls back to the column default and
+is ignored by the model — the feature is absent, not wrong. The trained
+categories are:
+
+| Field | Values |
+|---|---|
+| `arrival_mode` | `walk-in`, `ambulance`, `transfer`, `brought_by_family`, `police`, `helicopter` |
+| `sex` | `F`, `M`, `Other` |
+| `insurance_type` | `public`, `private`, `military`, `none`, `unknown` |
+| `chief_complaint_system` | `cardiovascular`, `respiratory`, `neurological`, `gastrointestinal`, `musculoskeletal`, `trauma`, `psychiatric`, `infectious`, `endocrine`, `dermatological`, `genitourinary`, `ophthalmic`, `ENT`, `other` |
 
 - All fields optional except nothing required by schema.
 - Numeric fields validated against clinical envelopes (`backend/ml/config.py`).
@@ -87,8 +101,8 @@ carry real patient PII.
 
 The API loads the actual saved artifact at startup (lazy via `load_model_if_needed()`):
 
-- **Artifact:** `models/triage_model.joblib` (saved by `backend/ml/train.py` `persist_pipeline`)
-- **Manifest:** `models/triage_model.manifest.json`
+- **Artifact:** `models/triagegeist/triage_model.joblib` (saved by `backend/ml/triagegeist_training.py`)
+- **Manifest:** `models/triagegeist/triage_model.manifest.json`
 - **Pipeline:** `Pipeline([("preprocess", ...), ("estimator", RandomForestClassifier(...))])`
 - **Preprocessing:** fitted `build_preprocessor()` from `backend/ml/features.py` — median imputation, `StandardScaler`, `OneHotEncoder` (`min_frequency=5`), `TfidfVectorizer`, missingness indicators.
 
@@ -160,7 +174,7 @@ curl http://localhost:8000/health
 curl http://localhost:8000/model-info
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
-  -d '{"temperature":98.6,"heartrate":88,"resprate":16,"o2sat":98,"sbp":120,"dbp":80,"pain":3,"arrival_transport":"AMBULANCE","chiefcomplaint":"CHEST PAIN"}'
+  -d '{"temperature_c":37.0,"heart_rate":88,"respiratory_rate":16,"spo2":98,"systolic_bp":120,"diastolic_bp":80,"pain_score":3,"arrival_mode":"ambulance","chief_complaint_system":"cardiovascular","age":45,"sex":"F"}'
 ```
 
 ---

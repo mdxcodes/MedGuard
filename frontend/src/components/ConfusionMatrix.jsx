@@ -19,33 +19,18 @@ export default function ConfusionMatrix({
   const getCellColor = (value, isDiagonal) => {
     if (max === 0) return 'bg-surface-soft';
     const intensity = value / max;
-    if (isDiagonal) {
-      // Teal for correct predictions
-      return `bg-teal/${Math.min(90, Math.round(intensity * 100))}`;
-    }
-    // Slate/rose for misclassifications - subtle
-    if (intensity < 0.2) return 'bg-surface-soft';
-    if (intensity < 0.4) return 'bg-rose-900/20';
-    if (intensity < 0.6) return 'bg-rose-100';
-    if (intensity < 0.8) return 'bg-rose-200';
-    return 'bg-rose-300';
+    if (isDiagonal) return `bg-primary/${Math.round(intensity * 40)}`;
+    return `bg-error/${Math.round(intensity * 20)}`;
   };
 
-  const getTextColor = (value, isDiagonal) => {
-    if (max === 0) return 'text-text-secondary';
-    const intensity = value / max;
-    if (isDiagonal) {
-      return intensity > 0.5 ? 'text-white' : 'text-teal';
-    }
-    return intensity > 0.6 ? 'text-rose-900' : 'text-text-secondary';
-  };
+  const getTextColor = () => 'text-primary-contrast';
 
   return (
     <div className="bg-surface rounded-2xl border border-border shadow-card p-6">
       <div className="mb-4">
         <h3 className="text-base font-bold text-primary tracking-tight">{title}</h3>
         {subtitle && (
-          <p className="text-xs text-text-muted mt-1 font-mono">{subtitle}</p>
+          <p className="text-xs text-muted mt-1 font-mono">{subtitle}</p>
         )}
       </div>
 
@@ -53,11 +38,11 @@ export default function ConfusionMatrix({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="p-2 text-xs font-mono text-text-muted font-medium"></th>
+              <th className="p-2 text-xs font-mono text-muted font-medium"></th>
               {labels.map(label => (
                 <th
                   key={`col-${label}`}
-                  className="p-2 text-xs font-mono text-text-muted font-medium text-center"
+                  className="p-2 text-xs font-mono text-muted font-medium text-center"
                 >
                   Pred {label.replace('ESI ', '')}
                 </th>
@@ -67,7 +52,7 @@ export default function ConfusionMatrix({
           <tbody>
             {matrix.map((row, i) => (
               <tr key={`row-${i}`}>
-                <th className="p-2 text-xs font-mono text-text-muted font-medium whitespace-nowrap">
+                <th className="p-2 text-xs font-mono text-muted font-medium whitespace-nowrap">
                   True {labels[i].replace('ESI ', '')}
                 </th>
                 {row.map((value, j) => {
@@ -98,15 +83,15 @@ export default function ConfusionMatrix({
         </table>
       </div>
 
-      <div className="mt-3 flex items-center gap-4 text-[11px] text-text-muted">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-teal/60 border border-border-subtle"></div>
-          <span>Correct (diagonal)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-rose-200 border border-border-subtle"></div>
-          <span>Misclassified</span>
-        </div>
+      <div className="mt-3 flex items-center gap-4 text-[11px] text-muted">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm bg-primary/60 border border-border-subtle"></div>
+            <span>Correct (diagonal)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm bg-error/40 border border-border-subtle"></div>
+            <span>Misclassified</span>
+          </div>
         <div className="ml-auto font-mono">
           Total: {matrix.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0)}
         </div>

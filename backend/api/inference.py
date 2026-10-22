@@ -76,22 +76,20 @@ def _normalize_assessment(req: AssessmentRequest) -> pd.DataFrame:
     row["num_active_medications"] = maybe_float(req.num_active_medications)
 
     # Categoricals
-    transport = req.arrival_mode
-    row["arrival_mode"] = (
-        str(transport).strip().upper() if transport is not None else "UNKNOWN"
+    #
+    # These are normalised into the *raw Triagegeist representation*, because
+    # that is what the model was fitted on. The one-hot encoder is fitted on
+    # the raw column values ('walk-in', 'public', 'cardiovascular', ...); a
+    # value that does not match one of those categories is silently dropped
+    # by the encoder, so a case change here would quietly remove the feature
+    # from every prediction.
+    row["arrival_mode"] = _normalise_category("arrival_mode", req.arrival_mode)
+    row["sex"] = _normalise_sex(req.sex)
+    row["insurance_type"] = _normalise_category(
+        "insurance_type", getattr(req, "insurance_type", None)
     )
-
-    sex = req.sex
-    row["sex"] = str(sex).strip().upper() if sex is not None else "UNKNOWN"
-
-    insurance = getattr(req, "insurance_type", None)
-    row["insurance_type"] = (
-        str(insurance).strip().title() if insurance is not None else "Unknown"
-    )
-
-    complaint_system = req.chief_complaint_system
-    row["chief_complaint_system"] = (
-        str(complaint_system).strip().title() if complaint_system is not None else "Unknown"
+    row["chief_complaint_system"] = _normalise_category(
+        "chief_complaint_system", req.chief_complaint_system
     )
 
     # Build frame with ALL expected feature columns (missing ones get NaN)
@@ -102,6 +100,106 @@ def _normalize_assessment(req: AssessmentRequest) -> pd.DataFrame:
 
     frame = pd.DataFrame([row])
     return frame
+
+
+def _normalise_sex(value: Optional[str]) -> str:
+    """Map a submitted sex value onto the categories the model was trained on.
+
+    The fitted encoder knows ``F``, ``M`` and ``Other``. Common synonyms are
+    mapped onto them; anything unrecognised becomes ``Other`` rather than a
+    new, unseen category.
+    """
+    if value is None:
+        return "Other"
+    text = str(value).strip().lower()
+    if text in ("f", "female"):
+        return "F"
+    if text in ("m", "male"):
+        return "M"
+    return "Other"
+
+
+# The categories the fitted one-hot encoder was trained on, exactly as they
+# appear in the Triagegeist release. A submitted value is matched against
+# these (case- and separator-insensitively) and returned in its canonical
+# spelling, so the encoder recognises it. A value that matches none of them
+# falls back to the column's default and is ignored by the encoder — the
+# feature is absent, not wrong.
+_TRAINED_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "arrival_mode": (
+        "ambulance",
+        "brought_by_family",
+        "helicopter",
+        "police",
+        "transfer",
+        "walk-in",
+    ),
+    "insurance_type": ("military", "none", "private", "public", "unknown"),
+    "chief_complaint_system": (
+        "ENT",
+        "cardiovascular",
+        "dermatological",
+        "endocrine",
+        "gastrointestinal",
+        "genitourinary",
+        "infectious",
+        "musculoskeletal",
+        "neurological",
+        "ophthalmic",
+        "other",
+        "psychiatric",
+        "respiratory",
+        "trauma",
+    ),
+}
+
+_CATEGORY_DEFAULTS: dict[str, str] = {
+    "arrival_mode": "unknown",
+    "insurance_type": "unknown",
+    "chief_complaint_system": "other",
+}
+
+# Unambiguous spellings and abbreviations that a caller might reasonably send
+# instead of the exact trained category.
+_CATEGORY_ALIASES: dict[str, str] = {
+    "earnoseandthroat": "ENT",
+    "ent": "ENT",
+    "gastrointestinal": "gastrointestinal",
+}
+
+
+def _category_key(value: str) -> str:
+    """Reduce a category to a comparison key.
+
+    Case and every separator are insignificant, so ``"Walk In"``,
+    ``"walk_in"``, ``"WALK-IN"`` and ``"Ear, Nose and Throat"`` compare
+    against their trained counterparts on letters alone.
+    """
+    return "".join(ch for ch in str(value).strip().lower() if ch.isalnum())
+
+
+def _normalise_category(column: str, value: Optional[str]) -> str:
+    """Return the canonical trained category for a submitted value.
+
+    Matching ignores case, surrounding whitespace and separators, so
+    ``"Brought by Family"``, ``"brought_by_family"`` and ``"BROUGHT BY FAMILY"``
+    all resolve to the single trained category.
+    """
+    trained = _TRAINED_CATEGORIES.get(column)
+    default = _CATEGORY_DEFAULTS.get(column, "unknown")
+    if value is None:
+        return default
+    if trained is None:
+        return str(value).strip()
+
+    key = _category_key(value)
+    alias = _CATEGORY_ALIASES.get(key)
+    if alias is not None and alias in trained:
+        return alias
+    for candidate in trained:
+        if _category_key(candidate) == key:
+            return candidate
+    return default
 
 
 def _apply_validation(frame: pd.DataFrame) -> pd.DataFrame:

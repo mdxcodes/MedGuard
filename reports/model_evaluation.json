@@ -2,7 +2,7 @@
   "dataset": "Triagegeist",
   "dataset_version": "synthetic",
   "source": "triagegeist/",
-  "generated_at_utc": "2026-10-21T11:10:44.022141+00:00",
+  "generated_at_utc": "2026-10-21T17:27:57.394460+00:00",
   "random_seed": 20260915,
   "n_rows": 80000,
   "n_patients": 80000,

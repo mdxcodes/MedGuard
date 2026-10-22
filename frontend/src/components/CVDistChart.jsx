@@ -2,8 +2,8 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 const COLORS = {
-  mean: '#14b8a6',
-  std: '#94a3b8',
+  mean: 'var(--color-primary)',
+  std: 'var(--color-muted)',
 };
 
 export default function CVDistChart({ summary, title = 'Cross-Validation Distributions (5-fold grouped)' }) {
@@ -47,34 +47,34 @@ export default function CVDistChart({ summary, title = 'Cross-Validation Distrib
     <div className="bg-surface rounded-2xl border border-border shadow-card p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-primary tracking-tight">{title}</h3>
-        <span className="text-[10px] font-mono text-text-muted bg-surface-soft px-2 py-0.5 rounded-md border border-border-subtle">
+        <span className="text-[10px] font-mono text-muted bg-surface-soft px-2 py-0.5 rounded-md border border-border-subtle">
           Mean ± Std (n={summary.n_folds || 5})
         </span>
       </div>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barSize={36} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" />
             <XAxis
               dataKey="metric"
-              tick={{ fontSize: 11, fill: '#475569' }}
-              axisLine={{ stroke: '#e2e8f0' }}
+              tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+              axisLine={{ stroke: 'var(--color-border-subtle)' }}
               tickLine={false}
             />
             <YAxis
               domain={[0, 0.7]}
-              tick={{ fontSize: 11, fill: '#475569' }}
-              axisLine={{ stroke: '#e2e8f0' }}
+              tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+              axisLine={{ stroke: 'var(--color-border-subtle)' }}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9' }} />
-            <Bar dataKey="mean" fill="#14b8a6" radius={[6, 6, 0, 0]} name="Mean" />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-ink)' }} />
+            <Bar dataKey="mean" fill="var(--color-primary)" radius={[6, 6, 0, 0]} name="Mean" />
           </BarChart>
         </ResponsiveContainer>
       </div>
       <div className="grid grid-cols-3 gap-2 mt-3 text-center">
         {data.map(d => (
-          <div key={d.metric} className="rounded-lg py-2 text-xs bg-surface-soft text-text-secondary">
+          <div key={d.metric} className="rounded-lg py-2 text-xs bg-surface-soft text-secondary">
             <div className="font-extrabold text-sm">{d.mean}</div>
             <div className="text-[10px] font-mono opacity-70">± {d.std}</div>
             <div className="font-mono text-[10px] opacity-70 mt-0.5">{d.metric}</div>

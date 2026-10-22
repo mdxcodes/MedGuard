@@ -61,7 +61,7 @@ export function ErrorState({ title, message, onRetry, retryLabel = 'Try again' }
       {message && <p className="text-sm text-secondary mt-2 max-w-md mx-auto">{message}</p>}
       {onRetry && (
         <button
-          className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover px-4 py-2 rounded-md transition"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-primary-contrast bg-primary hover:bg-primary-hover px-4 py-2 rounded-md transition"
           onClick={onRetry}
         >
           {retryLabel}
@@ -88,9 +88,9 @@ export function PageShell({ children, title, subtitle, breadcrumb }) {
 }
 
 /* ── Section card ── */
-export function SectionCard({ title, children, icon: Icon, badge }) {
+export function SectionCard({ title, children, icon: Icon, badge, id }) {
   return (
-    <section className="rounded-xl border border-border bg-surface shadow-sm">
+    <section id={id} className="rounded-xl border border-border bg-surface shadow-sm scroll-mt-24">
       {title && (
         <div className="px-6 py-4 border-b border-border bg-surface-soft">
           <div className="flex items-center gap-2">

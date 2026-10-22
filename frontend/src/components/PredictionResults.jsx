@@ -11,12 +11,15 @@ const LEVEL_LABELS = {
   5: { label: 'Lowest urgency', tone: 'lowest' },
 };
 
+// ESI tone cards: a translucent tint for the surface with a light accent for
+// the label. Deep ink on a translucent tint would be unreadable, and a light
+// accent on a solid accent would be invisible.
 const LEVEL_STYLES = {
-  urgent: { bg: 'bg-error-bg', border: 'border-error/20', text: 'text-error', dot: 'bg-error' },
-  high: { bg: 'bg-warning-bg', border: 'border-warning/20', text: 'text-warning', dot: 'bg-warning' },
-  moderate: { bg: 'bg-primary-soft', border: 'border-primary/20', text: 'text-primary', dot: 'bg-primary' },
-  low: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-secondary', dot: 'bg-secondary/30' },
-  lowest: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-secondary', dot: 'bg-secondary/30' },
+  urgent: { bg: 'bg-error/20', border: 'border-error/20', text: 'text-error', dot: 'bg-error' },
+  high: { bg: 'bg-warning/20', border: 'border-warning/20', text: 'text-warning', dot: 'bg-warning' },
+  moderate: { bg: 'bg-primary/20', border: 'border-primary/20', text: 'text-primary', dot: 'bg-primary' },
+  low: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-ink', dot: 'bg-secondary/30' },
+  lowest: { bg: 'bg-surface-lift', border: 'border-border', text: 'text-ink', dot: 'bg-secondary/30' },
 };
 
 export default function PredictionResults({ result }) {
@@ -40,14 +43,14 @@ export default function PredictionResults({ result }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs font-mono text-muted uppercase tracking-wider mb-2">Predicted Acuity</div>
-            <h2 className="text-4xl font-extrabold tracking-tight text-primary leading-none">ESI {predClass}</h2>
+            <h2 className="text-4xl font-extrabold tracking-tight text-primary-contrast leading-none">ESI {predClass}</h2>
             <p className={`text-sm font-medium mt-1 ${style.text}`}>{levelInfo.label}</p>
             <p className="text-[11px] text-muted mt-3 font-mono">
               {modelName} · Triagegeist synthetic · seed 20260915
             </p>
           </div>
           <div className="text-right shrink-0">
-            <div className={`flex items-center gap-1.5 text-2xl font-extrabold text-primary leading-none`}>
+            <div className={`flex items-center gap-1.5 text-2xl font-extrabold text-primary-contrast leading-none`}>
               {(maxProb * 100).toFixed(0)}%
             </div>
             <div className="text-[10px] font-mono text-muted mt-1">Max probability</div>
@@ -64,7 +67,7 @@ export default function PredictionResults({ result }) {
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-surface border border-border/30 px-2.5 py-1 rounded-full text-secondary">
-            <Shield className="w-3 h-3 text-primary" /> Research prototype — not clinically validated
+            <Shield className="w-3 h-3 text-primary-contrast" /> Research prototype — not clinically validated
           </span>
           <span className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-surface border border-border/30 px-2.5 py-1 rounded-full text-secondary">
             Probabilities not calibrated for clinical use
@@ -118,7 +121,7 @@ export default function PredictionResults({ result }) {
             <div className="space-y-1.5">
               {(result.explanation.top_features || []).map((f, i) => (
                 <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-lift border border-border hover:border-primary/20 transition">
-                  <div className="w-28 shrink-0 text-xs font-medium text-primary truncate" title={f.feature}>{f.feature}</div>
+                  <div className="w-28 shrink-0 text-xs font-medium text-secondary truncate" title={f.feature}>{f.feature}</div>
                   <div className="flex-1 h-2 bg-surface-lift rounded-full overflow-hidden relative">
                     <div
                       className={`h-full rounded-full ${f.shap_value > 0 ? 'bg-primary' : 'bg-error/40'}`}
@@ -126,7 +129,7 @@ export default function PredictionResults({ result }) {
                       aria-label={`${f.feature}: ${f.shap_value.toFixed(3)}`}
                     />
                   </div>
-                  <div className={`w-16 text-right text-xs font-mono font-medium ${f.shap_value > 0 ? 'text-primary' : 'text-error'}`}>
+                  <div className={`w-16 text-right text-xs font-mono font-medium tabular-nums ${f.shap_value > 0 ? 'text-primary-contrast' : 'text-ink'}`}>
                     {f.shap_value > 0 ? '+' : ''}{f.shap_value.toFixed(3)}
                   </div>
                   <div className="w-16 text-right text-[11px] font-mono text-muted">{f.sample_value?.toFixed(2) || '—'}</div>
@@ -142,7 +145,7 @@ export default function PredictionResults({ result }) {
         ) : (
           <div className="rounded-xl border border-border/50 bg-surface-lift p-6 text-center">
             <AlertTriangle className="w-8 h-8 text-warning mx-auto mb-2" />
-            <div className="text-sm font-medium text-primary">Explanation Unavailable</div>
+            <div className="text-sm font-medium text-secondary">Explanation Unavailable</div>
             <div className="text-[10px] text-muted mt-1">The prediction is valid; SHAP attribution could not be computed safely. The explanation status is clearly reported rather than fabricated.</div>
           </div>
         )}
@@ -150,7 +153,7 @@ export default function PredictionResults({ result }) {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
-        <a href="/assessment" className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium px-4 py-3 rounded-xl shadow-md shadow-primary/10 transition">
+        <a href="/assessment" className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-primary-contrast text-sm font-medium px-4 py-3 rounded-xl shadow-md shadow-primary/10 transition">
           New Assessment <ArrowRight className="w-3.5 h-3.5" />
         </a>
         <a href="/performance" className="inline-flex items-center gap-2 text-sm font-medium text-secondary hover:text-primary px-4 py-3 rounded-xl border border-border hover:bg-surface-lift transition">

@@ -33,13 +33,13 @@ export default function ReportExportButton({ className = '' }) {
       <button
         onClick={handleExport}
         disabled={loading}
-        className="inline-flex items-center gap-2 bg-navy hover:bg-navy-soft text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-md transition disabled:opacity-50"
+        className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-primary-contrast font-semibold text-sm px-4 py-2.5 rounded-xl shadow-md transition disabled:opacity-50"
       >
         <FileText className="w-4 h-4" />
         {loading ? 'Generating...' : 'Export Research Report (PDF)'}
         <Download className="w-4 h-4" />
       </button>
-      {error && <div className="text-xs text-rose-400 mt-1">{error}</div>}
+      {error && <div className="text-xs text-error mt-1">{error}</div>}
     </div>
   );
 }

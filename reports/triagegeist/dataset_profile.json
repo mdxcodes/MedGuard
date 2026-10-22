@@ -2,7 +2,9 @@
   "dataset": "Triagegeist",
   "version": "synthetic",
   "source": "triagegeist/",
-  "generated_at_utc": "2026-10-21T11:21:15.468674+00:00",
+  "reference_dataset": "Triagegeist (synthetic)",
+  "split_protocol": "patient-grouped 80/20 holdout, 5-fold grouped CV",
+  "generated_at_utc": "2026-10-21T17:37:03.187383+00:00",
   "file_inventory": {
     "train.csv": {
       "rows": 80000,
@@ -23,6 +25,11 @@
       "has_labels": true
     }
   },
+  "train_rows": 80000,
+  "train_patients": 80000,
+  "test_rows": 20000,
+  "test_patients": 20000,
+  "patient_overlap_train_test": 0,
   "row_counts": {
     "modelling_rows": 80000,
     "modelling_patients": 80000,
@@ -32,6 +39,13 @@
     "test_patients": 16000
   },
   "target_distribution": {
+    "ESI 1": 3222,
+    "ESI 2": 13439,
+    "ESI 3": 28921,
+    "ESI 4": 23020,
+    "ESI 5": 11398
+  },
+  "target_distribution_train": {
     "ESI 1": 3222,
     "ESI 2": 13439,
     "ESI 3": 28921,

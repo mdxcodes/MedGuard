@@ -55,7 +55,7 @@ export default function DatasetExplorerPage() {
 
       {/* Benchmark results */}
       {Object.keys(benchmark).length > 0 && (
-        <SectionCard title="Model benchmarks" badge="Validation holdout" icon={<BarChart3 className="w-4 h-4" />}>
+        <SectionCard id="benchmarks" title="Model benchmarks" badge="Validation holdout" icon={<BarChart3 className="w-4 h-4" />}>
           <div className="grid sm:grid-cols-3 gap-4 mt-3">
             {[['dummy', 'Dummy baseline'], ['logistic_regression', 'Logistic Regression'], ['random_forest', 'Random Forest']].map(([key, label]) => {
               const m = benchmark?.model_results?.[key];
@@ -75,7 +75,7 @@ export default function DatasetExplorerPage() {
       {/* Missing data */}
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-6">
-          <SectionCard title="Missing data (% of modelling rows)" badge="Per feature" icon={<AlertTriangle className="w-4 h-4" />}>
+          <SectionCard id="data-quality" title="Missing data (% of modelling rows)" badge="Per feature" icon={<AlertTriangle className="w-4 h-4" />}>
             <div className="space-y-2.5">
               {Object.entries(profile?.missing_percent || {}).map(([feature, pct]) => {
                 const v = Number(pct);

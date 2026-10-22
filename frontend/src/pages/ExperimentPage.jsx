@@ -65,7 +65,7 @@ export default function ExperimentPage() {
             </select>
           </div>
           <div className="flex items-end">
-            <button disabled={loading} onClick={run} className="w-full bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-5 py-3 rounded-xl shadow-lg shadow-primary/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
+            <button disabled={loading} onClick={run} className="w-full bg-primary hover:bg-primary-hover text-primary-contrast font-semibold text-sm px-5 py-3 rounded-xl shadow-lg shadow-primary/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
               {loading ? 'Running…' : 'Run experiment'}
             </button>
           </div>
@@ -77,7 +77,7 @@ export default function ExperimentPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Experiment history" badge={`${exps.length} run${exps.length !== 1 ? 's' : ''}`} icon={<Beaker className="w-4 h-4" />}>
+      <SectionCard id="history" title="Experiment history" badge={`${exps.length} run${exps.length !== 1 ? 's' : ''}`} icon={<Beaker className="w-4 h-4" />}>
         {exps.length === 0 ? (
           <div className="py-8 text-center">
             <div className="mx-auto w-10 h-10 rounded-full bg-surface-lift text-muted flex items-center justify-center">

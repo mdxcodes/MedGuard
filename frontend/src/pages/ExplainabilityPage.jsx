@@ -45,15 +45,15 @@ export default function ExplainabilityPage() {
         <div className="h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" barSize={18} margin={{ left: 120, right: 20, top: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#647489' }} axisLine={{ stroke: '#e5e7eb' }} />
-              <YAxis dataKey="feature" type="category" tick={{ fontSize: 10, fill: '#475569' }} width={110} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} axisLine={{ stroke: 'var(--color-border-subtle)' }} />
+              <YAxis dataKey="feature" type="category" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={110} />
               <Tooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 11, fontFamily: 'Inter, sans-serif' }}
+                contentStyle={{ borderRadius: 8, border: '1px solid var(--color-border-subtle)', fontSize: 11, fontFamily: 'Inter, sans-serif' }}
                 formatter={(v) => [v.toFixed(4), 'mean |SHAP|']}
                 labelFormatter={(l) => data.find((d) => d.feature === l)?.fullFeature ?? l}
               />
-              <Bar dataKey="meanAbsShap" fill="#14b8a6" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="meanAbsShap" fill="var(--color-primary)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
