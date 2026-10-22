@@ -12,6 +12,7 @@ import PatientHomePage from '../pages/patient/PatientHomePage';
 import PatientAssessmentPage from '../pages/patient/PatientAssessmentPage';
 import PatientResultPage from '../pages/patient/PatientResultPage';
 import PatientAboutPage from '../pages/patient/PatientAboutPage';
+import PatientHistoryPage from '../pages/patient/PatientHistoryPage';
 
 import OverviewPage from '../pages/OverviewPage';
 import AssessmentPage from '../pages/AssessmentPage';
@@ -57,6 +58,7 @@ const WrappedPatientHome = wrap(PatientHomePage);
 const WrappedPatientAssessment = wrap(PatientAssessmentPage);
 const WrappedPatientResult = wrap(PatientResultPage);
 const WrappedPatientAbout = wrap(PatientAboutPage);
+const WrappedPatientHistory = wrap(PatientHistoryPage);
 const WrappedNotFound = wrap(NotFoundPage);
 
 /**
@@ -206,6 +208,7 @@ function PatientRoutes() {
       <Route path="/assessment" element={<WrappedPatientAssessment />} />
       <Route path="/result" element={<WrappedPatientResult />} />
       <Route path="/about" element={<WrappedPatientAbout />} />
+      <Route path="/history" element={<WrappedPatientHistory />} />
       <Route path="*" element={<WrappedNotFound />} />
     </Routes>
   );

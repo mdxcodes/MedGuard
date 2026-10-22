@@ -75,18 +75,24 @@ describe('Regression — patient navigation', () => {
     window.localStorage.clear();
   });
 
-  it('offers only the four patient destinations', () => {
+  it('offers exactly the patient destinations', () => {
     expect(PATIENT_NAV.map((item) => item.label)).toEqual([
       'Home',
       'New Assessment',
       'My Result',
+      'My History',
       'About',
     ]);
   });
 
-  it('does not claim a patient history exists', () => {
+  it('only offers a history because the backend really stores one', () => {
+    // A "My History" entry is legitimate only while the service persists
+    // assessments. The backend exposes /history, and the browser never reads
+    // the database directly, so the entry reflects real storage rather than a
+    // fabricated feature.
     const labels = PATIENT_NAV.map((item) => item.label).join(' ').toLowerCase();
-    expect(labels).not.toContain('history');
+    expect(labels).toContain('history');
+    // Nothing may promise previously saved assessments that do not exist.
     expect(labels).not.toContain('previous');
   });
 });

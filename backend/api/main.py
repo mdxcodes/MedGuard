@@ -32,14 +32,16 @@ arbitrary origins are never trusted by default.
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import config as api_config
 from backend.api.inference import predict
+from backend.ml import persistence
 try:
     from backend.api.report_endpoint import export_research_report
 except Exception:
@@ -114,6 +116,66 @@ def _limitations_for(manifest) -> list[str]:
     return limitations
 
 
+def _store_assessment(
+    request: AssessmentRequest,
+    response,
+    owner: str,
+    duration_ms: int,
+) -> tuple[str, Optional[str]]:
+    """Store an assessment and its prediction. Returns (status, id)."""
+    if not persistence.persistence_configured():
+        return "not_configured", None
+    if not owner:
+        # Without an owner token the record could not be scoped to a caller,
+        # so it is not written rather than written to a shared bucket.
+        return "no_owner", None
+    if response.error is not None or response.prediction is None:
+        # Only a real prediction is worth storing.
+        return "not_configured", None
+
+    try:
+        from backend.api.config import model_state
+
+        manifest = model_state.get("manifest")
+        inputs = {
+            name: getattr(request, name)
+            for name in request.model_fields
+            if getattr(request, name, None) is not None
+        }
+        missing = [
+            name
+            for name in request.model_fields
+            if getattr(request, name, None) is None
+        ]
+        store = persistence.AssessmentStore()
+        assessment_id = store.record_assessment(
+            {
+                "owner_token": owner,
+                "surface": "patient",
+                "inputs": inputs,
+                "missing_inputs": missing,
+                "model_name": getattr(manifest, "model_name", None),
+                "model_version": getattr(manifest, "created_utc", None),
+                "predicted_esi_level": response.prediction.predicted_esi_level,
+                "probabilities": {
+                    str(item.esi_level): item.probability
+                    for item in response.prediction.probabilities
+                },
+                "explanation": (
+                    response.explanation.model_dump() if response.explanation else None
+                ),
+                "quality": response.quality.model_dump() if response.quality else None,
+                "uncertainty": response.uncertainty.model_dump() if response.uncertainty else None,
+                "input_warnings": len(response.quality.warnings) if response.quality else 0,
+                "duration_ms": duration_ms,
+            }
+        )
+        return ("saved", assessment_id) if assessment_id else ("failed", None)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not store the assessment: %s", exc)
+        return "failed", None
+
+
 def create_app() -> FastAPI:
     """Construct a fresh MedGuard FastAPI application.
 
@@ -164,16 +226,21 @@ def create_app() -> FastAPI:
         """Readiness probe: can the service actually serve a prediction?
 
         Unlike ``/health`` (process liveness) this verifies that the model
-        artifact is present and loadable. It is cheap once the model has been
-        loaded: the artifact is cached in process state and the check reuses
-        it, so no expensive SHAP or evaluation work is performed.
+        artifact is present, valid and compatible, and that it has actually
+        loaded. A download, validation, compatibility or memory failure is
+        reported as a failure with its cause - it is never reported as
+        readiness, and no dummy model is ever substituted.
         """
-        from backend.api.config import get_or_raise_model
+        from backend.api.config import get_or_raise_model, model_status
 
         try:
             _, manifest, feature_names = get_or_raise_model()
         except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+            state = model_status()
+            raise HTTPException(
+                status_code=503,
+                detail={"status": state["status"], "reason": str(exc)},
+            ) from exc
         return {
             "status": "ready",
             "model": manifest.model_name,
@@ -204,6 +271,51 @@ def create_app() -> FastAPI:
             limitations=_limitations_for(manifest),
             note=manifest.note,
         )
+
+    # --- Assessment history ------------------------------------------------
+    # The browser never talks to the database directly. It presents an
+    # opaque owner token and the backend scopes every query to it, so one
+    # caller can never see another caller's history.
+    def _owner_token(request: Request) -> str:
+        return (request.headers.get(persistence.OWNER_HEADER) or "").strip()
+
+    @app.get("/history")
+    def history(request: Request, limit: int = 50, offset: int = 0):
+        """Return the caller's stored assessments, newest first."""
+        owner = _owner_token(request)
+        if not owner:
+            return {"status": "no_owner", "assessments": [], "count": 0}
+        store = persistence.AssessmentStore()
+        if not store.enabled:
+            return {"status": "not_configured", "assessments": [], "count": 0}
+        try:
+            rows = store.list_assessments(owner, limit=min(limit, 200), offset=max(offset, 0))
+        except persistence.PersistenceError as exc:
+            log.warning("Could not read assessment history: %s", exc)
+            return {"status": "error", "assessments": [], "count": 0}
+        return {"status": "ok", "assessments": rows, "count": len(rows)}
+
+    @app.get("/history/{assessment_id}")
+    def history_item(assessment_id: str, request: Request):
+        """Return one stored assessment owned by the caller."""
+        owner = _owner_token(request)
+        if not owner:
+            raise HTTPException(status_code=400, detail="missing owner token")
+        store = persistence.AssessmentStore()
+        if not store.enabled:
+            raise HTTPException(status_code=503, detail="persistence is not configured")
+        try:
+            row = store.get_assessment(owner, assessment_id)
+        except persistence.PersistenceError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if row is None:
+            raise HTTPException(status_code=404, detail="assessment not found")
+        return row
+
+    @app.get("/history-status")
+    def history_status():
+        """Report whether history storage is configured on this service."""
+        return {"enabled": persistence.persistence_configured(), "table": "assessments"}
 
     @app.get("/models/versions")
     def models_versions():
@@ -249,9 +361,26 @@ def create_app() -> FastAPI:
         return export_research_report()
 
     @app.post("/predict", response_model=PredictResponse, status_code=200)
-    def predict_endpoint(request: AssessmentRequest) -> PredictResponse:
-        """Predict ESI acuity from the supplied triage assessment."""
-        return predict(request)
+    def predict_endpoint(
+        request: AssessmentRequest,
+        http_request: Request,
+    ) -> PredictResponse:
+        """Predict ESI acuity from the supplied triage assessment.
+
+        The assessment and its prediction are stored so the caller can see
+        their own history. Storage is best effort: a storage failure is
+        reported in the response but never turns a successful prediction into a
+        failed request, because the prediction itself did succeed.
+        """
+        started = time.perf_counter()
+        response = predict(request)
+        duration_ms = int((time.perf_counter() - started) * 1000)
+
+        owner = (http_request.headers.get(persistence.OWNER_HEADER) or "").strip()
+        response.persistence, response.assessment_id = _store_assessment(
+            request, response, owner, duration_ms
+        )
+        return response
 
     return app
 

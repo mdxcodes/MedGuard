@@ -40,6 +40,12 @@ export const ROUTES = [
     patient: { page: 'PatientAboutPage' },
     research: { page: 'MethodologyPage' },
   },
+  {
+    path: '/history',
+    label: 'My History',
+    patient: { page: 'PatientHistoryPage' },
+    research: { page: 'MethodologyPage' },
+  },
 
   /* ── Research Lab only ───────────────────────────────────────────────── */
   { path: '/performance', label: 'Model Performance', research: { page: 'PerformancePage' } },

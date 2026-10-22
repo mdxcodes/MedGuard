@@ -15,6 +15,7 @@ export const PATIENT_NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/assessment', label: 'New Assessment' },
   { to: '/result', label: 'My Result' },
+  { to: '/history', label: 'My History' },
   { to: '/about', label: 'About' },
 ];
 

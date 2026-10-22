@@ -13,10 +13,6 @@ import numpy as np
 import pandas as pd
 
 from backend.api.config import get_or_raise_model
-try:
-    from backend.ml.explain import explain_prediction
-except Exception:  # pragma: no cover
-    explain_prediction = None
 from backend.api.schemas import (
     AssessmentRequest,
     ClassProbability,
@@ -262,10 +258,14 @@ def _compute_prediction(
         for lvl in triagegeist_schema.ESI_LABELS
     ]
 
-    # SHAP explanation: best-effort
+    # SHAP explanation: best-effort. The explainability stack is imported
+    # here rather than at module scope so a process that only serves
+    # liveness and health checks does not pay for it at start-up.
     explanation_status = "unavailable"
     top_features: list[dict[str, Any]] = []
     try:
+        from backend.ml.explain import explain_prediction
+
         expl = explain_prediction(
             pipeline,
             X,

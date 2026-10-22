@@ -102,6 +102,23 @@ export default function PatientResult({ result, submittedPayload }) {
     : [];
 
   const provided = ASSESSMENT_FIELDS.filter((field) => hasValue(submittedPayload?.[field.name]));
+
+  // Whether this assessment was stored. The wording states the fact rather
+  // than implying a record exists when it does not.
+  const persistenceNote = (() => {
+    switch (result.persistence) {
+      case 'saved':
+        return 'This assessment was saved to your history in this browser.';
+      case 'not_configured':
+        return 'This assessment was not saved: history storage is not enabled on this deployment.';
+      case 'no_owner':
+        return 'This assessment was not saved: this browser could not be identified.';
+      case 'failed':
+        return 'This assessment was not saved: the history store could not be reached.';
+      default:
+        return null;
+    }
+  })();
   const missing = missingFields(submittedPayload || {});
 
   return (
@@ -241,6 +258,12 @@ export default function PatientResult({ result, submittedPayload }) {
               ))}
             </ul>
           </div>
+        )}
+
+        {persistenceNote && (
+          <p className="mt-4 text-[11px] text-muted leading-relaxed">
+            {persistenceNote}
+          </p>
         )}
 
         {result.explanation && result.explanation.explanation_status !== 'available' && (

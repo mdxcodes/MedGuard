@@ -11,12 +11,42 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import shap
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-from backend.ml.features import leakage_free_feature_names
+from backend.ml.triagegeist_preprocessing import leakage_free_feature_names
+
+#: Cached explainers, keyed by the identity of the estimator they belong to.
+#:
+#: ``shap.TreeExplainer`` rebuilds an internal copy of the tree structures.
+#: For this model that is about 185 MiB and 3.5 s, so building one per
+#: explanation request would spike memory on every call and make the
+#: endpoint slow. The explainer is a pure function of the fitted estimator,
+#: so caching it changes no result.
+_EXPLAINER_CACHE: dict[int, Any] = {}
+
+
+def _tree_explainer(estimator: Any) -> Any:
+    """Return a cached ``shap.TreeExplainer`` for ``estimator``."""
+    import shap
+
+    key = id(estimator)
+    cached = _EXPLAINER_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    explainer = shap.TreeExplainer(estimator)
+    # Only one model is served at a time; drop the previous explainer so the
+    # copy is not retained.
+    _EXPLAINER_CACHE.clear()
+    _EXPLAINER_CACHE[key] = explainer
+    return explainer
+
+
+def clear_explainer_cache() -> None:
+    """Release the cached explainer (used when the model is reloaded)."""
+    _EXPLAINER_CACHE.clear()
 
 
 def explain_prediction(
@@ -74,13 +104,17 @@ def explain_prediction(
 
     # Create appropriate explainer
     if isinstance(estimator, RandomForestClassifier):
-        explainer = shap.TreeExplainer(estimator)
+        explainer = _tree_explainer(estimator)
         raw_shap = explainer.shap_values(x_sample_trans)
     elif isinstance(estimator, LogisticRegression):
+        import shap
+
         explainer = shap.LinearExplainer(estimator, bg_trans)
         raw_shap = explainer.shap_values(x_sample_trans)
     else:
         # Generic KernelExplainer fallback
+        import shap
+
         explainer = shap.KernelExplainer(estimator.predict_proba, bg_trans)
         raw_shap = explainer.shap_values(x_sample_trans)
 
@@ -179,12 +213,16 @@ def explain_global(
         bg_trans = bg_trans.toarray()
 
     if isinstance(estimator, RandomForestClassifier):
-        explainer = shap.TreeExplainer(estimator)
+        explainer = _tree_explainer(estimator)
         raw_shap = explainer.shap_values(ref_trans)
     elif isinstance(estimator, LogisticRegression):
+        import shap
+
         explainer = shap.LinearExplainer(estimator, bg_trans)
         raw_shap = explainer.shap_values(ref_trans)
     else:
+        import shap
+
         explainer = shap.KernelExplainer(estimator.predict_proba, bg_trans)
         raw_shap = explainer.shap_values(ref_trans)
 

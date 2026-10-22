@@ -245,3 +245,8 @@ class PredictResponse(BaseModel):
         "MEDGUARD IS A RESEARCH PROTOTYPE. This output must NOT be used for "
         "clinical decision-making, triage routing, or treatment guidance."
     )
+    #: Whether this assessment was stored, and why not when it was not.
+    #: "saved" | "not_configured" | "no_owner" | "failed"
+    persistence: str = "not_configured"
+    #: Id of the stored assessment, when it was stored.
+    assessment_id: Optional[str] = None

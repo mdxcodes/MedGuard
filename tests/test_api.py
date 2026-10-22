@@ -239,7 +239,7 @@ class TestExplanation:
         # Force SHAP to fail; the API must not crash — return prediction + status='unavailable'.
         def broken_explain(*args, **kwargs):
             raise RuntimeError("intentional shap failure")
-        monkeypatch.setattr("backend.api.inference.explain_prediction", broken_explain)
+        monkeypatch.setattr("backend.ml.explain.explain_prediction", broken_explain)
         resp = client.post("/predict", json=synthetic_assessment.model_dump())
         assert resp.status_code == 200
         payload = resp.json()

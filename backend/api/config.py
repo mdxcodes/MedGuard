@@ -104,44 +104,75 @@ class ModelManifest(BaseModel):
 
 #: Singleton holding the loaded pipeline + manifest. Initialized on first
 #: request; tested via ``load_model_if_needed`` below.
-model_state: dict[str, Any] = {"pipeline": None, "manifest": None, "feature_names": None}
+#:
+#: ``status`` is one of ``unknown`` (not attempted), ``loading``, ``ready``,
+#: ``unavailable`` (no artifact configured or not present) or ``error``
+#: (fetched but rejected). ``reason`` carries a human-readable cause. The
+#: status never reports readiness unless the genuine artifact loaded.
+model_state: dict[str, Any] = {
+    "pipeline": None,
+    "manifest": None,
+    "feature_names": None,
+    "status": "unknown",
+    "reason": "",
+}
 
 log = logging.getLogger("medguard.api")
+
+
+def _model_spec() -> artifacts.ArtifactSpec:
+    """Describe the model artifact.
+
+    Built per call so that a change to the configured path is honoured
+    rather than frozen at import time.
+    """
+    return artifacts.ArtifactSpec(
+        label="model artifact",
+        local_path=MODEL_PATH,
+        bucket_env=artifacts.ARTIFACT_BUCKET_ENV,
+        object_env=artifacts.ARTIFACT_MODEL_OBJECT_ENV,
+        url_env=artifacts.MODEL_URL_ENV,
+        sha_env=artifacts.MODEL_SHA_ENV,
+    )
+
+
+def _manifest_spec() -> artifacts.ArtifactSpec:
+    """Describe the model manifest."""
+    return artifacts.ArtifactSpec(
+        label="model manifest",
+        local_path=MANIFEST_PATH,
+        bucket_env=artifacts.ARTIFACT_BUCKET_ENV,
+        object_env=artifacts.ARTIFACT_MANIFEST_OBJECT_ENV,
+        url_env=artifacts.MANIFEST_URL_ENV,
+        sha_env=artifacts.MANIFEST_SHA_ENV,
+    )
 
 
 def resolve_artifact_paths() -> tuple[Path, Path]:
     """Return the paths of the model and manifest artifacts.
 
-    The artifacts are taken from the local filesystem when they are present.
-    Otherwise they are fetched from the configured remote URL and verified
-    against their expected digest. Raises ``RuntimeError`` with an actionable
+    The artifacts are taken from the local filesystem when they are present
+    and their pinned digest matches. Otherwise they are fetched from the
+    configured source and verified. Raises ``RuntimeError`` with an actionable
     cause when they cannot be made available.
 
     No placeholder or dummy model is ever substituted.
     """
-    model_path = artifacts.resolve_artifact(
-        MODEL_PATH,
-        MODEL_PATH.name,
-        artifacts.MODEL_URL_ENV,
-        artifacts.MODEL_SHA_ENV,
-    )
-    manifest_path = artifacts.resolve_artifact(
-        MANIFEST_PATH,
-        MANIFEST_PATH.name,
-        artifacts.MANIFEST_URL_ENV,
-        artifacts.MANIFEST_SHA_ENV,
-    )
+    model_path = artifacts.resolve_artifact(_model_spec())
+    manifest_path = artifacts.resolve_artifact(_manifest_spec())
 
     missing = []
     if model_path is None:
         missing.append(
-            f"model artifact ({MODEL_PATH}); set {artifacts.MODEL_URL_ENV} to fetch it "
-            f"or place it on disk"
+            f"model artifact ({MODEL_PATH}); set {artifacts.MODEL_URL_ENV} or "
+            f"{artifacts.ARTIFACT_BUCKET_ENV} + {artifacts.ARTIFACT_MODEL_OBJECT_ENV} "
+            f"to fetch it, or place it on disk"
         )
     if manifest_path is None:
         missing.append(
-            f"model manifest ({MANIFEST_PATH}); set {artifacts.MANIFEST_URL_ENV} to fetch it "
-            f"or place it on disk"
+            f"model manifest ({MANIFEST_PATH}); set {artifacts.MANIFEST_URL_ENV} or "
+            f"{artifacts.ARTIFACT_BUCKET_ENV} + {artifacts.ARTIFACT_MANIFEST_OBJECT_ENV} "
+            f"to fetch it, or place it on disk"
         )
     if missing:
         raise RuntimeError(
@@ -187,15 +218,58 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
     if model_state.get("pipeline") is not None:
         return model_state["pipeline"], model_state["manifest"], model_state["feature_names"]
 
+    try:
+        return _load_model()
+    except artifacts.ArtifactUnavailable as exc:
+        model_state["status"] = "unavailable"
+        model_state["reason"] = str(exc)
+        raise
+    except artifacts.ArtifactCompatibilityError as exc:
+        model_state["status"] = "error"
+        model_state["reason"] = str(exc)
+        raise
+    except MemoryError as exc:
+        # The artifact does not fit in the instance's memory. This is a
+        # capacity problem, not a missing artifact, and it must not be
+        # reported as readiness.
+        model_state["status"] = "error"
+        model_state["reason"] = (
+            f"Not enough memory to load the model artifact: {exc}. "
+            "The instance needs more RAM than it currently has."
+        )
+        raise RuntimeError(model_state["reason"]) from exc
+    except RuntimeError as exc:
+        model_state["status"] = "error"
+        model_state["reason"] = str(exc)
+        raise
+
+
+def _load_model() -> tuple[Any, ModelManifest, list[str]]:
+    """Load, validate and cache the model artifact."""
     import joblib
     from backend.ml.triagegeist_preprocessing import leakage_free_feature_names
-    from backend.ml.triagegeist_training import run_training
+
+    model_state["status"] = "loading"
+    model_state["reason"] = ""
 
     model_path, manifest_path = resolve_artifact_paths()
 
-    import json as _json
-    with manifest_path.open(encoding="utf-8") as handle:
-        manifest_dict = _json.load(handle)
+    manifest_dict = artifacts.load_manifest_dict(manifest_path)
+
+    # Compatibility is checked BEFORE the artifact is deserialized. A pickle
+    # executes code on load, so the manifest that describes it - the dataset it
+    # was trained on, the target it predicts, and the library versions it was
+    # built with - is checked first. A matching digest proves the bytes are
+    # the ones we expect; it does not prove they are safe to unpickle.
+    problems = artifacts.validate_manifest_compatibility(manifest_dict)
+    if problems:
+        model_state["status"] = "error"
+        model_state["reason"] = "; ".join(problems)
+        raise artifacts.ArtifactCompatibilityError(
+            f"Model artifact is not compatible with this deployment: "
+            f"{'; '.join(problems)}"
+        )
+
     manifest = ModelManifest(**manifest_dict)
 
     pipeline = joblib.load(model_path)
@@ -233,6 +307,8 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
     model_state["pipeline"] = pipeline
     model_state["manifest"] = manifest
     model_state["feature_names"] = feature_names
+    model_state["status"] = "ready"
+    model_state["reason"] = ""
     log.info(
         "Loaded model %s (%s) with %d features from %s.",
         manifest.model_name,
@@ -241,6 +317,24 @@ def load_model_if_needed() -> tuple[Any, ModelManifest, list[str]]:
         model_path,
     )
     return pipeline, manifest, feature_names
+
+
+def model_status() -> dict[str, Any]:
+    """Report the current model state without triggering a load.
+
+    Readiness is only ``ready`` after the genuine artifact has loaded
+    successfully. A download, validation, compatibility or memory failure is
+    reported as such and never as readiness.
+    """
+    state = model_state.get("status", "unknown")
+    if state == "unknown" and model_state.get("pipeline") is not None:
+        state = "ready"
+    return {
+        "status": state,
+        "reason": model_state.get("reason", ""),
+        "model_name": (model_state.get("manifest").model_name
+                       if model_state.get("manifest") else None),
+    }
 
 
 def build_app() -> FastAPI:

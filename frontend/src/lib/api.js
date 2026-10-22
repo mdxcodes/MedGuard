@@ -1,3 +1,4 @@
+import { ownerHeaders } from './owner';
 /**
  * API fetch utility for MedGuard frontend.
  *
@@ -73,6 +74,9 @@ export async function apiFetch(path, options = {}) {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        // The owner token lets the backend scope any stored record to this
+        // browser. It is an opaque identifier, not a credential.
+        ...ownerHeaders(),
         ...options.headers,
       },
       ...options,
