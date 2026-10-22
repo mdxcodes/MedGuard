@@ -250,3 +250,45 @@ class TestNoDummySubstitution:
         message = str(excinfo.value)
         assert "model artifact" in message
         assert "RENDER_DEPLOYMENT_FIX" in message
+
+
+class TestUnavailableModelIsReportedCleanly:
+    """A missing artifact must be reported, never crash the endpoint.
+
+    This is the path the service takes before the artifact has been
+    delivered, so it has to answer with a structured error rather than an
+    unhandled exception.
+    """
+
+    def test_predict_reports_the_missing_model_without_a_server_error(
+        self, monkeypatch, tmp_path
+    ):
+        from fastapi.testclient import TestClient
+
+        from backend.api import config
+        from backend.api.main import create_app
+
+        monkeypatch.setattr(config, "MODEL_PATH", tmp_path / "absent.joblib")
+        monkeypatch.setattr(config, "MANIFEST_PATH", tmp_path / "absent.json")
+        monkeypatch.delenv("MEDGUARD_MODEL_URL", raising=False)
+        monkeypatch.delenv("MEDGUARD_MANIFEST_URL", raising=False)
+
+        # The loaded pipeline is cached in module state, so a model loaded by
+        # an earlier test would mask the missing-artifact path.
+        cached = dict(config.model_state)
+        config.model_state.update({"pipeline": None, "manifest": None, "feature_names": None})
+        try:
+            with TestClient(create_app(), raise_server_exceptions=False) as client:
+                response = client.post(
+                    "/predict",
+                    json={"heart_rate": 88, "systolic_bp": 120, "diastolic_bp": 80,
+                          "age": 45, "sex": "F"},
+                )
+        finally:
+            config.model_state.update(cached)
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["prediction"] is None
+        assert payload["error"]["code"] == "MODEL_UNAVAILABLE"
+        assert "Missing model artifact" in payload["error"]["detail"]

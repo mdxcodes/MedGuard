@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover
 from backend.api.schemas import (
     AssessmentRequest,
     ClassProbability,
+    ErrorResponse,
     ExplanationResponse,
     ExplanationItem,
     PredictResponse,

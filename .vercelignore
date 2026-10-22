@@ -1,0 +1,45 @@
+# Files that are not needed to build the frontend.
+#
+# The deployment only needs frontend/ (the app) and reports/ (the aggregate
+# evaluation JSON the research pages import). Everything else — the Python
+# backend, the 250 MB model artifact, the dataset, the virtualenv — is
+# excluded so the upload stays small.
+
+.git
+.gitignore
+.vercel
+
+# Python backend and its artifacts
+backend/
+models/
+triagegeist/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+requirements.txt
+render.yaml
+Dockerfile
+.python-version
+.dockerignore
+
+# Tests and docs
+tests/
+docs/
+*.md
+!reports/**
+
+# Local secrets
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Frontend build output and caches
+frontend/dist/
+frontend/node_modules/
+node_modules/
+.vite/
+frontend/.vite/

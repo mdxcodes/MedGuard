@@ -179,3 +179,4 @@ desktop.ini
 !requirements.txt
 !.env.example
 backend/ml/triagegeist.py
+.vercel

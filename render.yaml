@@ -21,7 +21,10 @@
 
 services:
   - type: web
-    name: medguard-api
+    # MUST match the name of the existing Render service. Render matches a
+    # blueprint service by name: if this were "medguard-api" instead, the
+    # next push would CREATE A SECOND service rather than updating this one.
+    name: MedGuard
     runtime: python
     plan: free
     region: oregon
@@ -61,11 +64,12 @@ services:
         sync: false
 
       # --- CORS ----------------------------------------------------------
-      # The deployed Vercel frontend, plus its preview deployments.
+      # The deployed Vercel frontend (production aliases) plus its preview
+      # deployments, whose hashed hostnames are not known in advance.
       - key: MEDGUARD_CORS_ORIGINS
-        value: https://medguard.vercel.app
+        value: https://med-guard-livid.vercel.app,https://med-guard-mambo-lits-projects.vercel.app
       - key: MEDGUARD_CORS_ORIGIN_REGEX
-        value: https://medguard-.*\.vercel\.app
+        value: https://med-guard-.*\.vercel\.app
 
       # --- Data ----------------------------------------------------------
       - key: MEDGUARD_DATA_ROOT

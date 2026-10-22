@@ -2,7 +2,15 @@ import { useState, useMemo, useEffect } from 'react';
 import { AlertTriangle, BarChart3, Filter, Search, Info } from 'lucide-react';
 import DisclaimerBanner from '../components/DisclaimerBanner';
 import { PageShell, SectionCard } from '../components/ui/states';
-import errorData from '../../../reports/evaluation_errors.json';
+
+/**
+ * The out-of-fold error set is ~13 MB. It is loaded with a dynamic import so
+ * Vite code-splits it into its own chunk, fetched only when this page is
+ * opened, instead of being inlined into the main bundle that every visitor
+ * downloads.
+ */
+const loadErrorRecords = () =>
+  import('../../../reports/evaluation_errors.json').then((module) => module.default?.records ?? []);
 
 /** Maximum number of error rows drawn into the table at once. */
 const RENDER_LIMIT = 200;
@@ -32,8 +40,25 @@ export default function ErrorAnalysisPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
   const [isLoading, setIsLoading] = useState(true);
+  const [records, setRecords] = useState([]);
 
-  const records = typeof errorData !== 'undefined' && errorData.records ? errorData.records : [];
+  // Load the (large) error records on demand and show a real loading state.
+  useEffect(() => {
+    let cancelled = false;
+    loadErrorRecords()
+      .then((loaded) => {
+        if (!cancelled) setRecords(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setRecords([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /**
    * Under- and over-triage, derived from the out-of-fold records.
@@ -78,12 +103,6 @@ export default function ErrorAnalysisPage() {
       byLevel: Object.values(byTrueLevel).sort((a, b) => a.level - b.level),
     };
   }, [records]);
-
-  // Simulate data loading for visual feedback
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
 
   const filtered = useMemo(() => {
     return records.filter(r => {

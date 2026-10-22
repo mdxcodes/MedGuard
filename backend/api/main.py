@@ -147,8 +147,11 @@ def create_app() -> FastAPI:
         allow_origins=allow_origins,
         allow_origin_regex=api_config.CORS_ORIGIN_REGEX,
         allow_credentials=allow_credentials,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+        # Methods and headers are not an access-control boundary; the origin
+        # list is. Keeping them permissive avoids breaking clients that add
+        # their own headers.
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/health")
